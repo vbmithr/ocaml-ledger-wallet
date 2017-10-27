@@ -1,0 +1,9 @@
+(executable
+ ((name test)
+  ;; (preprocess (pps (ppx_sexp_conv)))
+  (libraries (ledgerwallet))))
+
+(alias
+ ((name    runtest)
+  (deps    (test.exe))
+  (action  (run ${<}))))

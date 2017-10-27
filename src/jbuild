@@ -1,0 +1,12 @@
+(jbuild_version 1)
+
+(library
+ ((name        ledgerwallet)
+  (public_name ledgerwallet)
+  (synopsis "Ledger wallet library for OCaml")
+  (libraries (result ocplib-endian usb))))
+
+;; (executables
+;;  ((names        ())
+;;   (public_names ())
+;;   (libraries ())))

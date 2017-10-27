@@ -1,0 +1,13 @@
+lib: [
+  "_build/install/default/lib/ledgerwallet/META" {"META"}
+  "_build/install/default/lib/ledgerwallet/opam" {"opam"}
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.cmi"
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.cmx"
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.cmt"
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.cmti"
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.mli"
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.cma"
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.cmxa"
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.a"
+  "_build/install/default/lib/ledgerwallet/ledgerwallet.cmxs"
+]
