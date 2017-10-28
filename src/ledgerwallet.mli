@@ -9,4 +9,5 @@ module Status : sig
     | Ok
 end
 
-val ping : Usb.handle -> unit Lwt.t
+val ping : Hidapi.hid_device -> unit
+val get_random : Hidapi.hid_device -> int -> string

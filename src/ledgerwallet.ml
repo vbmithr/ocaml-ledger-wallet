@@ -1,5 +1,3 @@
-open Lwt.Infix
-
 module Status = struct
   type t =
     | Incorrect_length
@@ -148,7 +146,7 @@ module Apdu = struct
   let length { data } = 5 + String.length data
 
   let write buf pos { cmd ; p1 ; p2 ; lc ; le ; data } =
-    let open EndianString in
+    let open EndianBigstring in
     let len = match lc, le with | 0, _ -> le | _ -> lc in
     let datalen = String.length data in
     begin match cmd with
@@ -162,7 +160,7 @@ module Apdu = struct
     BigEndian.set_int8 buf (pos+2) p1 ;
     BigEndian.set_int8 buf (pos+3) p2 ;
     BigEndian.set_int8 buf (pos+4) len ;
-    String.blit data 0 buf (pos+5) datalen ;
+    Bigstring.blit_of_string data 0 buf (pos+5) datalen ;
     pos + 5 + datalen
 end
 
@@ -171,9 +169,10 @@ module Transport : sig
     | Ping
     | Apdu of Apdu.t
 
+  val packet_length : int
   val length : t -> int
-  val write : Bytes.t -> int -> t -> int
-  val read : Bytes.t -> int -> string
+  val write : EndianBigstring.bigstring -> int -> t -> int
+  val read : EndianBigstring.bigstring -> int -> string
 end = struct
   let packet_length = 64
   let channel = 0x0101
@@ -187,7 +186,7 @@ end = struct
     }
 
     let read buf pos =
-      let open EndianString in
+      let open EndianBigstring in
       if BigEndian.get_int16 buf pos <> channel then
         invalid_arg "Transport.read_header: invalid channel id" ;
       let cmd = match BigEndian.get_int8 buf (pos+2) with
@@ -225,28 +224,30 @@ end = struct
     | Ping -> 5
     | Apdu apdu ->
       let apdu_len = Apdu.length apdu in
-      if apdu_len < packet_length - 7 then apdu_len + 7 else
+      if apdu_len < packet_length - 7 then packet_length else
       let rec inner acc rest =
-        if rest < packet_length - 5 then acc + rest + 5
+        if rest < packet_length - 5 then acc + packet_length
         else inner (acc + packet_length) (rest - (packet_length - 5))
       in
       inner packet_length (apdu_len - (packet_length - 7))
 
-  let write buf pos = function
+  let write (buf : EndianBigstring.bigstring) pos = function
     | Ping ->
-      let open EndianString in
+      let open EndianBigstring in
       BigEndian.set_int16 buf pos channel ;
       BigEndian.set_int8 buf (pos+2) ping ;
       BigEndian.set_int16 buf (pos+3) 0 ;
-      pos + 5
+      Bigstring.fill_slice buf '\x00' 5 59 ;
+      pos + packet_length
+
     | Apdu ({ cmd ; p1 ; p2 ; lc ; le ; data } as p) ->
       let apdu_len = Apdu.length p in
-      let apdu_buf = Bytes.create apdu_len in
+      let apdu_buf = Bigstring.create apdu_len in
       let _nb_written = Apdu.write apdu_buf 0 p in
       let apdu_p = ref 0 in (* pos in the apdu buf *)
       let i = ref 0 in (* packet id *)
       let p = ref pos in (* pos in the result buf *)
-      let open EndianString in
+      let open EndianBigstring in
 
       (* write first packet *)
       BigEndian.set_int16 buf !p channel ;
@@ -254,7 +255,7 @@ end = struct
       BigEndian.set_int16 buf (!p+3) !i ;
       BigEndian.set_int16 buf (!p+5) apdu_len ;
       let nb_to_write = (min apdu_len (packet_length - 7)) in
-      Bytes.blit apdu_buf 0 buf (!p+7) nb_to_write ;
+      Bigstring.blit apdu_buf 0 buf (!p+7) nb_to_write ;
       p := !p + 7 + nb_to_write ;
       apdu_p := !apdu_p + nb_to_write ;
       incr i ;
@@ -265,7 +266,7 @@ end = struct
         BigEndian.set_int8 buf (!p+2) apdu ;
         BigEndian.set_int16 buf (!p+3) !i ;
         let nb_to_write = (min (apdu_len - !apdu_p) (packet_length - 5)) in
-        Bytes.blit apdu_buf !apdu_p buf (!p+5) nb_to_write ;
+        Bigstring.blit apdu_buf !apdu_p buf (!p+5) nb_to_write ;
         p := !p + 5 + nb_to_write ;
         apdu_p := !apdu_p + nb_to_write ;
         incr i
@@ -276,21 +277,21 @@ end = struct
       match total_written mod packet_length with
       | 0 -> pos + total_written
       | rem ->
-        Bytes.fill buf !p (packet_length - rem) '\x00' ;
+        Bigstring.fill_slice buf '\x00' !p (packet_length - rem) ;
         pos + total_written + (packet_length - rem)
 
   let read buf pos =
     let hdr, pos = Header.read buf pos in
     let cmd = hdr.cmd in
     Header.check_exn ~seq:0 hdr ;
-    let len = EndianString.BigEndian.get_int16 buf pos in
+    let len = EndianBigstring.BigEndian.get_int16 buf pos in
     let i = ref 0 in
     let p = ref (pos + 2) in
     let out = Bytes.create len in
     let nb_to_read = min len (packet_length - 7) in
 
     let out_p = ref 0 in
-    String.blit buf !p out !out_p nb_to_read ;
+    Bigstring.blit_to_bytes buf !p out !out_p nb_to_read ;
     out_p := !out_p + nb_to_read ;
     p := !p + nb_to_read ;
     incr i ;
@@ -298,27 +299,32 @@ end = struct
       let hdr, pos = Header.read buf !p in
       Header.check_exn ~cmd ~seq:!i hdr ;
       let nb_to_read = min (len - !out_p) (packet_length - Header.length) in
-      String.blit buf pos out !out_p nb_to_read ;
+      Bigstring.blit_to_bytes buf pos out !out_p nb_to_read ;
       p := pos + nb_to_read ;
       out_p := !out_p + nb_to_read
     done ;
     out
 end
 
-let ping handle =
-  let len = Transport.length Ping in
-  let buf = Bytes.create len in
-  let _nb_written = Transport.write buf 0 Ping in
-  Usb.interrupt_send ~handle ~endpoint:2 buf 0 len >>= fun _ ->
-  Lwt.return_unit
+let ping h =
+  let buf = Bigstring.create Transport.packet_length in
+  let nb_written = Transport.write buf 0 Ping in
+  let nb_written' = Hidapi.hid_write h buf nb_written in
+  assert (nb_written = nb_written' && nb_written = Transport.packet_length) ;
+  let nb_read = Hidapi.hid_read_timeout ~timeout:1000 h buf Transport.packet_length in
+  assert (nb_read = Transport.packet_length) ;
+  let payload = Transport.read buf 0 in
+  assert (payload = "")
 
-let get_random handle len =
+let get_random h len =
+  let random_string = Bigstring.create len in
   let apdu = Apdu.(create ~le:len (Cla Get_random)) in
   let len = Transport.length (Apdu apdu) in
-  let buf = Bytes.create len in
+  let buf = Bigstring.create len in
   let _nb_written = Transport.write buf 0 (Apdu apdu) in
-  Usb.interrupt_send ~handle ~endpoint:0 buf 0 len >>= fun _ ->
-  Lwt.return_unit
+  let _nb_written' = Hidapi.hid_write h buf len in
+  let nb_read = Hidapi.hid_read_timeout ~timeout:1000 h random_string 0 in
+  Bigstring.sub_string buf 0 nb_read
 
 let get_public_key indices =
   let nb_indices = List.length indices in

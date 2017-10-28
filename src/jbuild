@@ -4,7 +4,7 @@
  ((name        ledgerwallet)
   (public_name ledgerwallet)
   (synopsis "Ledger wallet library for OCaml")
-  (libraries (result ocplib-endian usb))))
+  (libraries (result bigstring ocplib-endian.bigstring hidapi))))
 
 ;; (executables
 ;;  ((names        ())
