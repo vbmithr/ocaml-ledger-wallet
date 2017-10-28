@@ -2,6 +2,7 @@ open Sexplib.Std
 
 module Status = struct
   type t =
+    | Invalid_pin of int
     | Incorrect_length
     | Security_status_unsatisfied
     | Invalid_data
@@ -17,8 +18,9 @@ module Status = struct
     | 0x6a82 -> File_not_found
     | 0x6b00 -> Incorrect_params
     | 0x9000 -> Ok
+    | v when v >= 0x63c0 && v <= 0x63cf -> Invalid_pin (v land 7)
     | v when v >= 0x6f00 && v <= 0x6fff -> Technical_problem v
-    | v -> invalid_arg ("Status.of_int: got " ^ string_of_int v)
+    | v -> invalid_arg (Printf.sprintf "Status.of_int: got 0x%x" v)
 
   let to_string t =
     Sexplib.Sexp.to_string_hum (sexp_of_t t)
@@ -329,8 +331,147 @@ module Operation_mode = struct
   }
 end
 
+module Second_factor = struct
+  type t =
+    | Keyboard
+    | Card
+    | Card_screen [@@deriving sexp]
+
+  let of_int = function
+    | 0x11 -> Keyboard
+    | 0x12 -> Card
+    | 0x13 -> Card_screen
+    | _ -> invalid_arg "Second_factor.of_int"
+end
+
 let get_operation_mode ?buf h =
   Transport.write_apdu ?buf h Apdu.(create ~le:1 (Cla Get_operation_mode)) ;
   match Transport.read ?buf h with
   | Status.Ok, b -> Operation_mode.of_int (EndianBytes.BigEndian.get_int8 b 0)
+  | s, _ -> failwith (Status.to_string s)
+
+let get_second_factor ?buf h =
+  Transport.write_apdu ?buf h Apdu.(create ~p1:1 ~le:1 (Cla Get_operation_mode)) ;
+  match Transport.read ?buf h with
+  | Status.Ok, b -> Second_factor.of_int (EndianBytes.BigEndian.get_int8 b 0)
+  | s, _ -> failwith (Status.to_string s)
+
+module Firmware_version = struct
+  type flag =
+    | Public_key_compressed
+    | Internal_screen_buttons
+    | External_screen_buttons
+    | Nfc
+    | Ble
+    | Tee
+  [@@deriving sexp]
+
+  let flag_of_bit = function
+    | 0x01 -> Public_key_compressed
+    | 0x02 -> Internal_screen_buttons
+    | 0x04 -> External_screen_buttons
+    | 0x08 -> Nfc
+    | 0x10 -> Ble
+    | 0x20 -> Tee
+    | _ -> invalid_arg "Firmware_version.flag_of_bit"
+
+  let flags_of_int i =
+    List.fold_left begin fun a e ->
+      if i land e <> 0 then
+        flag_of_bit e :: a else a
+    end [] [0x01; 0x02; 0x04; 0x08; 0x10; 0x20]
+
+  type t = {
+    flags : flag list ;
+    arch : int ;
+    major : int ;
+    minor : int ;
+    patch : int ;
+    loader_major : int ;
+    loader_minor : int ;
+  } [@@deriving sexp]
+
+  let create ~flags ~arch ~major ~minor ~patch ~loader_major ~loader_minor =
+    let flags = flags_of_int flags in
+    { flags ; arch ; major ; minor ; patch ; loader_major ; loader_minor }
+end
+
+let get_firmware_version ?buf h =
+  let open EndianString.BigEndian in
+  Transport.write_apdu ?buf h Apdu.(create ~le:7 (Cla Get_firmware_version)) ;
+  match Transport.read ?buf h with
+  | Status.Ok, b ->
+    let flags = get_int8 b 0 in
+    let arch = get_int8 b 1 in
+    let major = get_int8 b 2 in
+    let minor = get_int8 b 3 in
+    let patch = get_int8 b 4 in
+    let loader_major = get_int8 b 5 in
+    let loader_minor = get_int8 b 6 in
+    Firmware_version.create flags arch major minor patch loader_major loader_minor
+  | s, _ -> failwith (Status.to_string s)
+
+let verify_pin ?buf h pin =
+  let lc = String.length pin in
+  Transport.write_apdu ?buf h Apdu.(create ~lc ~data:pin (Cla Verify_pin)) ;
+  match Transport.read ?buf h with
+  | Status.Ok, b -> begin
+    match EndianString.BigEndian.get_int8 b 0 with
+    | 0x01 -> `Need_power_cycle
+    | _ -> `Ok
+  end
+  | s, _ -> failwith (Status.to_string s)
+
+let get_remaining_pin_attempts ?buf h =
+  Transport.write_apdu ?buf h Apdu.(create ~p1:0x80 ~lc:1 ~data:"\x00" (Cla Verify_pin)) ;
+  match Transport.read ?buf h with
+  | Status.Invalid_pin n, _ -> n
+  | Status.Ok, _ -> failwith "get_remaining_pin_attempts got OK"
+  | s, _ -> failwith (Status.to_string s)
+
+module Public_key = struct
+  type t = {
+    uncompressed : string ;
+    b58addr : string ;
+    bip32_chaincode : string ;
+  } [@@deriving sexp]
+
+  let create ~uncompressed ~b58addr ~bip32_chaincode = {
+    uncompressed ; b58addr ; bip32_chaincode
+  }
+
+  let of_bytes buf pos =
+    let open EndianBytes.BigEndian in
+    let keylen = get_int8 buf pos in
+    let uncompressed = Bytes.create keylen in
+    Bytes.blit buf (pos+1) uncompressed 0 keylen ;
+    let addrlen = get_int8 buf (pos+1+keylen) in
+    let b58addr = Bytes.create addrlen in
+    Bytes.blit buf (pos+1+keylen+1) b58addr 0 addrlen ;
+    let bip32_chaincode = Bytes.create 32 in
+    Bytes.blit buf (pos+1+keylen+1+addrlen) b58addr 0 32 ;
+    create ~uncompressed ~b58addr ~bip32_chaincode,
+    pos+1+keylen+1+addrlen+32
+end
+
+let get_wallet_pubkeys ?buf h keys =
+  let open EndianBytes.BigEndian in
+  let nb_keys = List.length keys in
+  if nb_keys > 10 then invalid_arg "get_wallet_pubkeys: max 10 addrs" ;
+  let lc = 1 + 4 * nb_keys in
+  let data = Bytes.create lc in
+  set_int8 data 0 nb_keys ;
+  List.iteri begin fun i k ->
+    set_int32 data (1 + 4 * i) k
+  end keys ;
+  Transport.write_apdu ?buf h Apdu.(create ~lc ~data (Cla Get_wallet_public_key)) ;
+  match Transport.read ?buf h with
+  | Status.Ok, b -> begin
+      let rec inner keys pos n =
+        if n < nb_keys then
+          let key, pos = Public_key.of_bytes b pos in
+          inner (key :: keys) pos (succ n)
+        else List.rev keys
+      in inner [] 0 0
+  end
   | s, _ -> failwith (Status.to_string s)
