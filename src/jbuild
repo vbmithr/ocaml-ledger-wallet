@@ -3,8 +3,9 @@
 (library
  ((name        ledgerwallet)
   (public_name ledgerwallet)
+  (preprocess (pps (ppx_sexp_conv)))
   (synopsis "Ledger wallet library for OCaml")
-  (libraries (result bigstring ocplib-endian.bigstring hidapi))))
+  (libraries (result bigstring ocplib-endian ocplib-endian.bigstring hidapi))))
 
 ;; (executables
 ;;  ((names        ())

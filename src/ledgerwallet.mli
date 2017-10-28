@@ -1,13 +1,16 @@
-module Status : sig
-  type t =
-    | Incorrect_length
-    | Security_status_unsatisfied
-    | Invalid_data
-    | File_not_found
-    | Incorrect_params
-    | Technical_problem of int
-    | Ok
+module Operation_mode : sig
+  type mode =
+    | Standard
+    | Relaxed
+    | Server
+    | Developer [@@deriving sexp]
+
+  type t = {
+    mode : mode ;
+    seed_not_redeemed : bool ;
+  } [@@deriving sexp]
 end
 
-val ping : Hidapi.hid_device -> unit
-val get_random : Hidapi.hid_device -> int -> string
+val ping : ?buf:Bigstring.t -> Hidapi.hid_device -> unit
+val get_random : ?buf:Bigstring.t -> Hidapi.hid_device -> int -> string
+val get_operation_mode : ?buf:Bigstring.t -> Hidapi.hid_device -> Operation_mode.t

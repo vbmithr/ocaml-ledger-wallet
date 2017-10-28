@@ -1,3 +1,5 @@
+open Sexplib.Std
+
 module Status = struct
   type t =
     | Incorrect_length
@@ -6,7 +8,7 @@ module Status = struct
     | File_not_found
     | Incorrect_params
     | Technical_problem of int
-    | Ok
+    | Ok [@@deriving sexp]
 
   let of_int = function
     | 0x6700 -> Incorrect_length
@@ -16,15 +18,18 @@ module Status = struct
     | 0x6b00 -> Incorrect_params
     | 0x9000 -> Ok
     | v when v >= 0x6f00 && v <= 0x6fff -> Technical_problem v
-    | _ -> invalid_arg "Status.of_int"
+    | v -> invalid_arg ("Status.of_int: got " ^ string_of_int v)
+
+  let to_string t =
+    Sexplib.Sexp.to_string_hum (sexp_of_t t)
 end
 
 module Apdu = struct
   type ins =
     | Setup
     | Verify_pin
-    | Set_operation_mode
     | Get_operation_mode
+    | Set_operation_mode
     | Set_keymap
     | Set_comm_protocol
     | Get_wallet_public_key
@@ -51,8 +56,8 @@ module Apdu = struct
   let int_of_ins = function
     | Setup -> 0x20
     | Verify_pin -> 0x22
-    | Set_operation_mode -> 0x24
-    | Get_operation_mode -> 0x26
+    | Get_operation_mode -> 0x24
+    | Set_operation_mode -> 0x26
     | Set_keymap -> 0x28
     | Set_comm_protocol -> 0x2a
     | Get_wallet_public_key -> 0x40
@@ -79,8 +84,8 @@ module Apdu = struct
   let ins_of_int = function
     | 0x20 -> Setup
     | 0x22 -> Verify_pin
-    | 0x24 -> Set_operation_mode
-    | 0x26 -> Get_operation_mode
+    | 0x24 -> Get_operation_mode
+    | 0x26 -> Set_operation_mode
     | 0x28 -> Set_keymap
     | 0x2a -> Set_comm_protocol
     | 0x40 -> Get_wallet_public_key
@@ -164,16 +169,7 @@ module Apdu = struct
     pos + 5 + datalen
 end
 
-module Transport : sig
-  type t =
-    | Ping
-    | Apdu of Apdu.t
-
-  val packet_length : int
-  val length : t -> int
-  val write : EndianBigstring.bigstring -> int -> t -> int
-  val read : EndianBigstring.bigstring -> int -> string
-end = struct
+module Transport = struct
   let packet_length = 64
   let channel = 0x0101
   let apdu = 0x05
@@ -216,120 +212,125 @@ end = struct
     let length = 5
   end
 
-  type t =
-    | Ping
-    | Apdu of Apdu.t
+  let write_ping ?(buf=Bigstring.create packet_length) h =
+    let open EndianBigstring in
+    BigEndian.set_int16 buf 0 channel ;
+    BigEndian.set_int8 buf 2 ping ;
+    BigEndian.set_int16 buf 3 0 ;
+    Bigstring.fill_slice buf '\x00' 5 59 ;
+    let nb_written = Hidapi.hid_write h buf packet_length in
+    if nb_written <> packet_length then failwith "Transport.write_ping"
 
-  let length = function
-    | Ping -> 5
-    | Apdu apdu ->
-      let apdu_len = Apdu.length apdu in
-      if apdu_len < packet_length - 7 then packet_length else
-      let rec inner acc rest =
-        if rest < packet_length - 5 then acc + packet_length
-        else inner (acc + packet_length) (rest - (packet_length - 5))
-      in
-      inner packet_length (apdu_len - (packet_length - 7))
+  let write_apdu
+      ?(buf=Bigstring.create packet_length)
+      h ({ Apdu.cmd ; p1 ; p2 ; lc ; le ; data } as p) =
+    let apdu_len = Apdu.length p in
+    let apdu_buf = Bigstring.create apdu_len in
+    let _nb_written = Apdu.write apdu_buf 0 p in
+    let apdu_p = ref 0 in (* pos in the apdu buf *)
+    let i = ref 0 in (* packet id *)
+    let open EndianBigstring in
 
-  let write (buf : EndianBigstring.bigstring) pos = function
-    | Ping ->
-      let open EndianBigstring in
-      BigEndian.set_int16 buf pos channel ;
-      BigEndian.set_int8 buf (pos+2) ping ;
-      BigEndian.set_int16 buf (pos+3) 0 ;
-      Bigstring.fill_slice buf '\x00' 5 59 ;
-      pos + packet_length
-
-    | Apdu ({ cmd ; p1 ; p2 ; lc ; le ; data } as p) ->
-      let apdu_len = Apdu.length p in
-      let apdu_buf = Bigstring.create apdu_len in
-      let _nb_written = Apdu.write apdu_buf 0 p in
-      let apdu_p = ref 0 in (* pos in the apdu buf *)
-      let i = ref 0 in (* packet id *)
-      let p = ref pos in (* pos in the result buf *)
-      let open EndianBigstring in
-
-      (* write first packet *)
-      BigEndian.set_int16 buf !p channel ;
-      BigEndian.set_int8 buf (!p+2) apdu ;
-      BigEndian.set_int16 buf (!p+3) !i ;
-      BigEndian.set_int16 buf (!p+5) apdu_len ;
-      let nb_to_write = (min apdu_len (packet_length - 7)) in
-      Bigstring.blit apdu_buf 0 buf (!p+7) nb_to_write ;
-      p := !p + 7 + nb_to_write ;
-      apdu_p := !apdu_p + nb_to_write ;
-      incr i ;
-
-      (* write following packets *)
-      while !apdu_p < apdu_len do
-        BigEndian.set_int16 buf !p channel ;
-        BigEndian.set_int8 buf (!p+2) apdu ;
-        BigEndian.set_int16 buf (!p+3) !i ;
-        let nb_to_write = (min (apdu_len - !apdu_p) (packet_length - 5)) in
-        Bigstring.blit apdu_buf !apdu_p buf (!p+5) nb_to_write ;
-        p := !p + 5 + nb_to_write ;
-        apdu_p := !apdu_p + nb_to_write ;
-        incr i
-      done ;
-
-      (* write trailing zeros if needed *)
-      let total_written = !p - pos in
-      match total_written mod packet_length with
-      | 0 -> pos + total_written
-      | rem ->
-        Bigstring.fill_slice buf '\x00' !p (packet_length - rem) ;
-        pos + total_written + (packet_length - rem)
-
-  let read buf pos =
-    let hdr, pos = Header.read buf pos in
-    let cmd = hdr.cmd in
-    Header.check_exn ~seq:0 hdr ;
-    let len = EndianBigstring.BigEndian.get_int16 buf pos in
-    let i = ref 0 in
-    let p = ref (pos + 2) in
-    let out = Bytes.create len in
-    let nb_to_read = min len (packet_length - 7) in
-
-    let out_p = ref 0 in
-    Bigstring.blit_to_bytes buf !p out !out_p nb_to_read ;
-    out_p := !out_p + nb_to_read ;
-    p := !p + nb_to_read ;
+    (* write first packet *)
+    BigEndian.set_int16 buf 0 channel ;
+    BigEndian.set_int8 buf 2 apdu ;
+    BigEndian.set_int16 buf 3 !i ;
+    BigEndian.set_int16 buf 5 apdu_len ;
+    let nb_to_write = (min apdu_len (packet_length - 7)) in
+    Bigstring.blit apdu_buf 0 buf 7 nb_to_write ;
+    let nb_written = Hidapi.hid_write h buf packet_length in
+    if nb_written <> packet_length then failwith "Transport.write_apdu" ;
+    apdu_p := !apdu_p + nb_to_write ;
     incr i ;
-    while len - !out_p > 0 do
-      let hdr, pos = Header.read buf !p in
-      Header.check_exn ~cmd ~seq:!i hdr ;
-      let nb_to_read = min (len - !out_p) (packet_length - Header.length) in
-      Bigstring.blit_to_bytes buf pos out !out_p nb_to_read ;
-      p := pos + nb_to_read ;
-      out_p := !out_p + nb_to_read
-    done ;
-    out
+
+    (* write following packets *)
+    while !apdu_p < apdu_len do
+      Bigstring.fill buf '\x00' ;
+      BigEndian.set_int16 buf 0 channel ;
+      BigEndian.set_int8 buf 2 apdu ;
+      BigEndian.set_int16 buf 3 !i ;
+      let nb_to_write = (min (apdu_len - !apdu_p) (packet_length - 5)) in
+      Bigstring.blit apdu_buf !apdu_p buf 5 nb_to_write ;
+      let nb_written = Hidapi.hid_write h buf packet_length in
+      if nb_written <> packet_length then failwith "Transport.write_apdu" ;
+      apdu_p := !apdu_p + nb_to_write ;
+      incr i
+    done
+
+  let read ?(buf=Bigstring.create packet_length) h =
+    let expected_seq = ref 0 in
+    let payload = ref (Bytes.create 0) in
+    let pos = ref 0 in
+    let rec inner () =
+      let nb_read = Hidapi.hid_read_timeout ~timeout:1000 h buf packet_length in
+      if nb_read <> packet_length then failwith "Transport.read" ;
+      let hdr, pos_buf = Header.read buf 0 in
+      Header.check_exn ~seq:!expected_seq hdr ;
+      if hdr.seq = 0 then begin
+        let len = EndianBigstring.BigEndian.get_int16 buf pos_buf in
+        payload := Bytes.create len ;
+        let nb_to_read = min len (packet_length - 7) in
+        Bigstring.blit_to_bytes buf 7 !payload !pos nb_to_read ;
+        pos := !pos + nb_to_read ;
+        expected_seq := !expected_seq + 1 ;
+      end else begin
+        let rem = Bytes.length !payload - !pos in
+        let nb_to_read = min rem (packet_length - 5) in
+        Bigstring.blit_to_bytes buf 5 !payload !pos nb_to_read ;
+        pos := !pos + nb_to_read ;
+        expected_seq := !expected_seq + 1
+      end ;
+      if Bytes.length !payload - !pos = 0 then
+        if hdr.cmd = `Ping then Status.Ok, ""
+        else
+          let sw_pos = Bytes.length !payload - 2 in
+          Status.of_int (EndianBytes.BigEndian.get_uint16 !payload sw_pos),
+          String.sub !payload 0 sw_pos
+      else inner ()
+    in
+    inner ()
 end
 
-let ping h =
-  let buf = Bigstring.create Transport.packet_length in
-  let nb_written = Transport.write buf 0 Ping in
-  let nb_written' = Hidapi.hid_write h buf nb_written in
-  assert (nb_written = nb_written' && nb_written = Transport.packet_length) ;
-  let nb_read = Hidapi.hid_read_timeout ~timeout:1000 h buf Transport.packet_length in
-  assert (nb_read = Transport.packet_length) ;
-  let payload = Transport.read buf 0 in
-  assert (payload = "")
+let ping ?buf h =
+  Transport.write_ping ?buf h ;
+  match Transport.read ?buf h with
+  | Status.Ok, "" -> ()
+  | _ -> failwith ""
 
-let get_random h len =
-  let random_string = Bigstring.create len in
-  let apdu = Apdu.(create ~le:len (Cla Get_random)) in
-  let len = Transport.length (Apdu apdu) in
-  let buf = Bigstring.create len in
-  let _nb_written = Transport.write buf 0 (Apdu apdu) in
-  let _nb_written' = Hidapi.hid_write h buf len in
-  let nb_read = Hidapi.hid_read_timeout ~timeout:1000 h random_string 0 in
-  Bigstring.sub_string buf 0 nb_read
+let get_random ?buf h len =
+  Transport.write_apdu ?buf h Apdu.(create ~le:len (Cla Get_random)) ;
+  match Transport.read ?buf h with
+  | Status.Ok, random_str -> random_str
+  | s, _ -> failwith (Status.to_string s)
 
-let get_public_key indices =
-  let nb_indices = List.length indices in
-  if nb_indices > 10 then
-    invalid_arg "Wallet.get_pubkeys: indices > 10" ;
-  let lc = 1 + 4 * nb_indices in
-  Apdu.(create ~lc (Cla Get_public_key))
+module Operation_mode = struct
+  type mode =
+    | Standard
+    | Relaxed
+    | Server
+    | Developer
+  [@@deriving sexp]
 
+  let mode_of_int = function
+    | 0 -> Standard
+    | 1 -> Relaxed
+    | 4 -> Server
+    | 8 -> Developer
+    | _ -> invalid_arg "Operation_mode.mode_of_int"
+
+  type t = {
+    mode : mode ;
+    seed_not_redeemed : bool ;
+  } [@@deriving sexp]
+
+  let of_int v = {
+    mode = mode_of_int (v land 7) ;
+    seed_not_redeemed = (v land 8 <> 0) ;
+  }
+end
+
+let get_operation_mode ?buf h =
+  Transport.write_apdu ?buf h Apdu.(create ~le:1 (Cla Get_operation_mode)) ;
+  match Transport.read ?buf h with
+  | Status.Ok, b -> Operation_mode.of_int (EndianBytes.BigEndian.get_int8 b 0)
+  | s, _ -> failwith (Status.to_string s)
