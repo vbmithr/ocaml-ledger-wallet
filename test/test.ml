@@ -19,12 +19,11 @@ let main () =
     (Sexplib.Sexp.to_string_hum (Second_factor.sexp_of_t second_factor)) ;
   let random_str = Ledgerwallet.get_random h 200 in
   Printf.printf "%d %S\n" (String.length random_str) random_str ;
-  match get_wallet_pubkeys h [0l] with
-  | [] -> failwith "No pk"
-  | [pk] ->
-    Printf.printf "First pubkey: %s\n"
-      (Sexplib.Sexp.to_string_hum (Public_key.sexp_of_t pk)) ;
-  | _ -> failwith "More than 1 pk"
-
+  let pk =  get_wallet_pubkeys h Bitcoin.Util.KeyPath.[H 44l; H 1l; H 0l; N 0l; N 0l] in
+  let `Hex uncomp = Hex.of_string pk.uncompressed in
+  Printf.printf "Uncompressed public key %s\n" uncomp ;
+  Printf.printf "Adderss %s\n" pk.b58addr ;
+  let `Hex chaincode = Hex.of_string pk.bip32_chaincode in
+  Printf.printf "Chaincode %s\n" chaincode
 
 let () = main ()

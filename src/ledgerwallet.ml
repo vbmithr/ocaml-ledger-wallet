@@ -264,8 +264,9 @@ module Transport = struct
     let payload = ref (Bytes.create 0) in
     let pos = ref 0 in
     let rec inner () =
-      let nb_read = Hidapi.hid_read_timeout ~timeout:1000 h buf packet_length in
-      if nb_read <> packet_length then failwith "Transport.read" ;
+      let nb_read = Hidapi.hid_read_timeout ~timeout:600000 h buf packet_length in
+      if nb_read <> packet_length then
+        failwith (Printf.sprintf "Transport.read: read %d bytes" nb_read) ;
       let hdr, pos_buf = Header.read buf 0 in
       Header.check_exn ~seq:!expected_seq hdr ;
       if hdr.seq = 0 then begin
@@ -449,29 +450,21 @@ module Public_key = struct
     let b58addr = Bytes.create addrlen in
     Bytes.blit buf (pos+1+keylen+1) b58addr 0 addrlen ;
     let bip32_chaincode = Bytes.create 32 in
-    Bytes.blit buf (pos+1+keylen+1+addrlen) b58addr 0 32 ;
+    Bytes.blit buf (pos+1+keylen+1+addrlen) bip32_chaincode 0 32 ;
     create ~uncompressed ~b58addr ~bip32_chaincode,
     pos+1+keylen+1+addrlen+32
 end
 
-let get_wallet_pubkeys ?buf h keys =
+let get_wallet_pubkeys ?buf h keyPath =
   let open EndianBytes.BigEndian in
-  let nb_keys = List.length keys in
-  if nb_keys > 10 then invalid_arg "get_wallet_pubkeys: max 10 addrs" ;
-  let lc = 1 + 4 * nb_keys in
-  let data = Bytes.create lc in
-  set_int8 data 0 nb_keys ;
-  List.iteri begin fun i k ->
-    set_int32 data (1 + 4 * i) k
-  end keys ;
+  let nb_derivations = List.length keyPath in
+  if nb_derivations > 10 then invalid_arg "get_wallet_pubkeys: max 10 derivations" ;
+  let lc = 1 + 4 * nb_derivations in
+  let data = Bytes.make lc '\x00' in
+  set_int8 data 0 nb_derivations ;
+  let end_pos = Bitcoin.Util.KeyPath.write_be data 1 keyPath in
+  assert (end_pos = lc) ;
   Transport.write_apdu ?buf h Apdu.(create ~lc ~data (Cla Get_wallet_public_key)) ;
   match Transport.read ?buf h with
-  | Status.Ok, b -> begin
-      let rec inner keys pos n =
-        if n < nb_keys then
-          let key, pos = Public_key.of_bytes b pos in
-          inner (key :: keys) pos (succ n)
-        else List.rev keys
-      in inner [] 0 0
-  end
+  | Status.Ok, b -> fst (Public_key.of_bytes b 0)
   | s, _ -> failwith (Status.to_string s)
