@@ -47,11 +47,14 @@ module Public_key : sig
   } [@@deriving sexp]
 end
 
-val ping : ?buf:Bigstring.t -> Hidapi.hid_device -> unit
-val get_random : ?buf:Bigstring.t -> Hidapi.hid_device -> int -> string
-val get_operation_mode : ?buf:Bigstring.t -> Hidapi.hid_device -> Operation_mode.t
-val get_second_factor : ?buf:Bigstring.t -> Hidapi.hid_device -> Second_factor.t
-val get_firmware_version : ?buf:Bigstring.t -> Hidapi.hid_device -> Firmware_version.t
-val verify_pin : ?buf:Bigstring.t -> Hidapi.hid_device -> string -> [`Ok | `Need_power_cycle]
-val get_remaining_pin_attempts : ?buf:Bigstring.t -> Hidapi.hid_device -> int
-val get_wallet_pubkeys : ?buf:Bigstring.t -> Hidapi.hid_device -> Bitcoin.Util.KeyPath.t -> Public_key.t
+val ping : ?buf:Cstruct.t -> Hidapi.hid_device -> unit
+val get_random : ?buf:Cstruct.t -> Hidapi.hid_device -> int -> string
+val get_operation_mode : ?buf:Cstruct.t -> Hidapi.hid_device -> Operation_mode.t
+val get_second_factor : ?buf:Cstruct.t -> Hidapi.hid_device -> Second_factor.t
+val get_firmware_version : ?buf:Cstruct.t -> Hidapi.hid_device -> Firmware_version.t
+val verify_pin : ?buf:Cstruct.t -> Hidapi.hid_device -> string -> [`Ok | `Need_power_cycle]
+val get_remaining_pin_attempts : ?buf:Cstruct.t -> Hidapi.hid_device -> int
+val get_wallet_pubkeys :
+  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Util.KeyPath.t -> Public_key.t
+val get_trusted_input :
+  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> int -> Cstruct.t
