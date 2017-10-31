@@ -58,3 +58,37 @@ val get_wallet_pubkeys :
   ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Util.KeyPath.t -> Public_key.t
 val get_trusted_input :
   ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> int -> Cstruct.t
+
+type input_type =
+  | Untrusted
+  | Trusted of Cstruct.t list
+  | Segwit of Int64.t list
+
+val hash_tx_input_start :
+  ?buf:Cstruct.t -> new_transaction:bool -> input_type:input_type -> Hidapi.hid_device ->
+  Bitcoin.Protocol.Transaction.t -> unit
+
+val hash_tx_finalize_full :
+  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
+
+module HashType : sig
+  type typ =
+    | All
+    | None
+    | Single
+
+  type flag =
+    | ForkId
+    | AnyoneCanPay
+
+  type t = {
+    typ: typ ;
+    flags: flag list ;
+  }
+
+  val create : typ:typ -> flags:flag list -> t
+end
+
+val hash_sign :
+  ?buf:Cstruct.t -> path:Bitcoin.Util.KeyPath.t -> hash_type:HashType.t ->
+  Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
