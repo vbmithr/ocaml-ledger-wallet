@@ -545,15 +545,18 @@ let hash_tx_input_start ?buf ~new_transaction ~input_type h (tx : Bitcoin.Protoc
       Cstruct.set_uint8 cs 0 0x02 ;
       let cs' = Cstruct.shift cs 1 in
       let cs' = Outpoint.to_cstruct cs' prev_out in
-      Cstruct.BE.set_uint64 cs' 0 amount ;
+      Cstruct.LE.set_uint64 cs' 0 amount ;
       let cs' = Cstruct.shift cs' 8 in
       let cs' =
-        if new_transaction then CompactSize.to_cstruct_int cs' 0
-        else Script.to_cstruct cs' script
+        if new_transaction then
+          CompactSize.to_cstruct_int cs' 0
+        else
+          let cs' = CompactSize.to_cstruct_int cs' (Script.size script) in
+          Script.to_cstruct cs' script
       in
       Cstruct.LE.set_uint32 cs' 0 seq ;
       let lc = cs'.off + 4 in
-      ign_cs (write_payload ?buf h ~ins:Hash_input_start ~p1:0x80 ~p2 (Cstruct.sub cs 0 lc))
+      ign_cs (write_payload ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc))
     end tx.inputs amounts
   | _ -> invalid_arg "unsupported input type"
 
@@ -562,7 +565,12 @@ let hash_tx_finalize_full ?buf h (tx : Bitcoin.Protocol.Transaction.t) =
   let cs = Cstruct.create 100000 in
   let cs' = Util.CompactSize.to_cstruct_int cs (List.length tx.outputs) in
   let cs' = List.fold_left Protocol.TxOut.to_cstruct cs' tx.outputs in
-  write_payload ~finalize_full:true ?buf h ~ins:Hash_input_finalize_full (Cstruct.sub cs 0 cs'.off)
+  let res =
+    write_payload ~msg:"hash_tx_finalize_full" ~finalize_full:true
+      ?buf h ~ins:Hash_input_finalize_full (Cstruct.sub cs 0 cs'.off) in
+  match Cstruct.get_uint8 res 0 with
+  | 0x00 -> false
+  | _ -> true
 
 module HashType = struct
   type typ =
@@ -571,9 +579,9 @@ module HashType = struct
     | Single
 
   let int_of_typ = function
-    | All -> 0
-    | None -> 1
-    | Single -> 2
+    | All -> 1
+    | None -> 2
+    | Single -> 3
 
   type flag =
     | ForkId
@@ -596,7 +604,7 @@ module HashType = struct
     end (int_of_typ typ) flags
 end
 
-let hash_sign ?buf ~path ~hash_type h (tx : Bitcoin.Protocol.Transaction.t) =
+let hash_sign ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transaction.t) =
   let open Bitcoin in
   let nb_derivations = List.length path in
   if nb_derivations > 10 then invalid_arg "hash_sign: max 10 derivations" ;
@@ -604,11 +612,31 @@ let hash_sign ?buf ~path ~hash_type h (tx : Bitcoin.Protocol.Transaction.t) =
   let cs = Cstruct.create lc in
   Cstruct.memset cs 0 ;
   Cstruct.set_uint8 cs 0 nb_derivations ;
-  let cs' = Cstruct.shift cs 1 in
-  let cs' = Bitcoin.Util.KeyPath.write_be_cstruct cs' path in
+  let cs' = Bitcoin.Util.KeyPath.write_be_cstruct (Cstruct.shift cs 1) path in
   Cstruct.set_uint8 cs' 0 0 ;
-  let cs' = Cstruct.shift cs 1 in
-  Cstruct.BE.set_uint32 cs' 0 (Protocol.Transaction.LockTime.to_int32 tx.lock_time) ;
-  let cs' = Cstruct.shift cs 4 in
-  Cstruct.set_uint8 cs' 0 (HashType.to_int hash_type) ;
-  Transport.apdu ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign))
+  Cstruct.BE.set_uint32 cs' 1 (Protocol.Transaction.LockTime.to_int32 tx.lock_time) ;
+  Cstruct.set_uint8 cs' 5 HashType.(create hash_type hash_flags |> to_int) ;
+  Transport.apdu ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign))
+
+module Bch = struct
+  let sign ?buf ~path h (tx : Bitcoin.Protocol.Transaction.t) prev_amounts =
+    let nb_prev_amounts = List.length prev_amounts in
+    let nb_inputs = List.length tx.inputs in
+    if nb_prev_amounts <> nb_inputs then invalid_arg
+        (Printf.sprintf "Bch.sign: prev_amounts do not match inputs (%d inputs vs %d amounts)"
+           nb_inputs nb_prev_amounts) ;
+    let open Bitcoin.Protocol in
+    hash_tx_input_start
+      ?buf ~new_transaction:true ~input_type:(Segwit prev_amounts) h tx ;
+    let _pin_required = hash_tx_finalize_full ?buf h tx in
+    ListLabels.map2 tx.inputs prev_amounts ~f:begin fun txi prev_amount ->
+      let virtual_tx = { tx with inputs = [txi] } in
+      hash_tx_input_start ?buf h virtual_tx
+        ~new_transaction:false
+        ~input_type:(Segwit [prev_amount]) ;
+      let signature =
+        hash_sign ?buf ~path ~hash_type:All ~hash_flags:[ForkId] h virtual_tx in
+      Cstruct.set_uint8 signature 0 0x30 ;
+      signature
+    end
+end

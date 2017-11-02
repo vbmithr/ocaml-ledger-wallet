@@ -69,7 +69,7 @@ val hash_tx_input_start :
   Bitcoin.Protocol.Transaction.t -> unit
 
 val hash_tx_finalize_full :
-  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
+  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> bool
 
 module HashType : sig
   type typ =
@@ -80,15 +80,15 @@ module HashType : sig
   type flag =
     | ForkId
     | AnyoneCanPay
-
-  type t = {
-    typ: typ ;
-    flags: flag list ;
-  }
-
-  val create : typ:typ -> flags:flag list -> t
 end
 
 val hash_sign :
-  ?buf:Cstruct.t -> path:Bitcoin.Util.KeyPath.t -> hash_type:HashType.t ->
+  ?buf:Cstruct.t -> path:Bitcoin.Util.KeyPath.t ->
+  hash_type:HashType.typ -> hash_flags:HashType.flag list ->
   Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
+
+module Bch : sig
+  val sign :
+    ?buf:Cstruct.t -> path:Bitcoin.Util.KeyPath.t -> Hidapi.hid_device ->
+    Bitcoin.Protocol.Transaction.t -> Int64.t list -> Cstruct.t list
+end
