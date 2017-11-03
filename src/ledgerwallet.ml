@@ -642,7 +642,7 @@ module HashType = struct
     end (int_of_typ typ) flags
 
   let of_int i =
-    { typ = typ_of_int i ; flags = flags_of_int i }
+    { typ = typ_of_int (i land 0x07) ; flags = flags_of_int i }
 end
 
 let hash_sign ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transaction.t) =

@@ -42,6 +42,7 @@ let main () =
   let pk = get_wallet_pubkeys h path in
   let pk_computed =
     Secp256k1.Public.of_bytes_exn ctx pk.uncompressed.buffer in
+  let pk_compressed = Secp256k1.Public.to_bytes ctx pk_computed |> Cstruct.of_bigarray in
   let addr_computed = Bitcoin.Wallet.Address.of_pubkey ctx pk_computed in
   let `Hex uncomp = Hex.of_cstruct pk.uncompressed in
   Printf.printf "Uncompressed public key %s\n%!" uncomp ;
@@ -55,9 +56,24 @@ let main () =
   let `Hex ti = Hex.of_cstruct (get_trusted_input h prevTx 0) in
   Printf.printf "Trusted input %s\n%!" ti ;
   Format.printf "%a@." Bitcoin.Protocol.Transaction.pp nextTx ;
-  let signatures = sign_segwit ~path ~prev_amounts:[3000000000L] h nextTx in
-  Printf.printf "Got %d segwit signatures.\n%!" (List.length signatures) ;
-  let signatures = sign ~path ~prev_outputs:[prevTx, 0] h nextTx in
-  Printf.printf "Got %d signatures.\n%!" (List.length signatures)
+  let bch_signatures = sign_segwit ~bch:true ~path ~prev_amounts:[3000000000L] h nextTx in
+  Printf.printf "Got %d BCH signatures.\n%!" (List.length bch_signatures) ;
+  (* let signatures = sign ~path ~prev_outputs:[prevTx, 0] h nextTx in
+   * Printf.printf "Got %d signatures.\n%!" (List.length signatures) ; *)
+  let bchSig = List.hd bch_signatures in
+  let scriptSig =
+    Bitcoin.Script.[Element.O (Op_pushdata (Cstruct.len bchSig));
+                    D bchSig ;
+                    O (Op_pushdata (Cstruct.len pk_compressed)) ;
+                    D pk_compressed ;
+                   ] in
+  let nextTx_input = List.hd nextTx.inputs in
+  let nextTx_input = { nextTx_input with script = scriptSig @ nextTx_input.script } in
+  let txFinal = { nextTx with inputs = [nextTx_input] } in
+  let cs = Cstruct.create 1024 in
+  let cs' = Bitcoin.Protocol.Transaction.to_cstruct cs txFinal in
+  let txSerialized = Cstruct.sub cs 0 cs'.off in
+  let `Hex txS_hex = Hex.of_cstruct txSerialized in
+  Printf.printf "Tx = %s" txS_hex
 
 let () = main ()
