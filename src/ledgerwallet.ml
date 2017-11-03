@@ -4,19 +4,25 @@ module Status = struct
   type t =
     | Invalid_pin of int
     | Incorrect_length
+    | Incompatible_file_structure
     | Security_status_unsatisfied
-    | Invalid_data
+    | Conditions_of_use_not_satisfied
+    | Incorrect_data
     | File_not_found
     | Incorrect_params
+    | Ins_not_supported
     | Technical_problem of int
     | Ok [@@deriving sexp]
 
   let of_int = function
     | 0x6700 -> Incorrect_length
+    | 0x6981 -> Incompatible_file_structure
     | 0x6982 -> Security_status_unsatisfied
-    | 0x6a80 -> Invalid_data
-    | 0x6a82 -> File_not_found
+    | 0x6985 -> Conditions_of_use_not_satisfied
+    | 0x6a80 -> Incorrect_data
+    | 0x9404 -> File_not_found
     | 0x6b00 -> Incorrect_params
+    | 0x6d00 -> Ins_not_supported
     | 0x9000 -> Ok
     | v when v >= 0x63c0 && v <= 0x63cf -> Invalid_pin (v land 0x0f)
     | v when v >= 0x6f00 && v <= 0x6fff -> Technical_problem (v land 0xff)
@@ -405,11 +411,12 @@ module Firmware_version = struct
     patch : int ;
     loader_major : int ;
     loader_minor : int ;
+    loader_patch : int ;
   } [@@deriving sexp]
 
-  let create ~flags ~arch ~major ~minor ~patch ~loader_major ~loader_minor =
+  let create ~flags ~arch ~major ~minor ~patch ~loader_major ~loader_minor ~loader_patch =
     let flags = flags_of_int flags in
-    { flags ; arch ; major ; minor ; patch ; loader_major ; loader_minor }
+    { flags ; arch ; major ; minor ; patch ; loader_major ; loader_minor ; loader_patch }
 end
 
 let get_firmware_version ?buf h =
@@ -421,9 +428,10 @@ let get_firmware_version ?buf h =
   let major = get_uint8 b 2 in
   let minor = get_uint8 b 3 in
   let patch = get_uint8 b 4 in
-  let loader_major = get_uint8 b 5 in
-  let loader_minor = get_uint8 b 6 in
-  Firmware_version.create flags arch major minor patch loader_major loader_minor
+  let loader_major = get_uint8 b 5 land 0x0f in
+  let loader_minor = get_uint8 b 6 lsr 4 in
+  let loader_patch = get_uint8 b 6 land 0x0f in
+  Firmware_version.create flags arch major minor patch loader_major loader_minor loader_patch
 
 let verify_pin ?buf h pin =
   let lc = String.length pin in
@@ -525,7 +533,8 @@ type input_type =
   | Trusted of Cstruct.t list
   | Segwit of Int64.t list
 
-let hash_tx_input_start ?buf ~new_transaction ~input_type h (tx : Bitcoin.Protocol.Transaction.t) =
+let hash_tx_input_start
+    ?buf ~new_transaction ~input_type h (tx : Bitcoin.Protocol.Transaction.t) index =
   let open Bitcoin in
   let open Bitcoin.Util in
   let open Bitcoin.Protocol in
@@ -535,16 +544,15 @@ let hash_tx_input_start ?buf ~new_transaction ~input_type h (tx : Bitcoin.Protoc
     | _ -> 0x00 in
   let cs = Cstruct.create 100000 in
   Cstruct.LE.set_uint32 cs 0 (Int32.of_int tx.version) ;
-  let cs' = Cstruct.shift cs 4 in
-  let cs' = Bitcoin.Util.CompactSize.to_cstruct_int cs' (List.length tx.inputs) in
+  let cs' =
+    Bitcoin.Util.CompactSize.to_cstruct_int (Cstruct.shift cs 4) (List.length tx.inputs) in
   let lc = cs'.off in
   ign_cs (write_payload ?buf h ~ins:Hash_input_start ~p2 (Cstruct.sub cs 0 lc)) ;
   match input_type with
   | Segwit amounts ->
     List.iter2 begin fun { TxIn.prev_out ; script ; seq } amount ->
       Cstruct.set_uint8 cs 0 0x02 ;
-      let cs' = Cstruct.shift cs 1 in
-      let cs' = Outpoint.to_cstruct cs' prev_out in
+      let cs' = Outpoint.to_cstruct (Cstruct.shift cs 1) prev_out in
       Cstruct.LE.set_uint64 cs' 0 amount ;
       let cs' = Cstruct.shift cs' 8 in
       let cs' =
@@ -558,6 +566,27 @@ let hash_tx_input_start ?buf ~new_transaction ~input_type h (tx : Bitcoin.Protoc
       let lc = cs'.off + 4 in
       ign_cs (write_payload ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc))
     end tx.inputs amounts
+  | Trusted inputs ->
+    let _ = List.fold_left2 begin fun i { TxIn.prev_out ; script ; seq } input ->
+      let input_len = Cstruct.len input in
+      Cstruct.set_uint8 cs 0 0x01 ;
+      Cstruct.set_uint8 cs 1 input_len ;
+      Cstruct.blit input 0 cs 2 input_len ;
+      let cs' = Cstruct.shift cs (2+input_len) in
+      let cs' =
+        if i = index then
+          let cs' =
+            CompactSize.to_cstruct_int cs' (Script.size script) in
+          Script.to_cstruct cs' script
+        else
+          CompactSize.to_cstruct_int cs' 0
+      in
+      Cstruct.LE.set_uint32 cs' 0 seq ;
+      let lc = cs'.off + 4 in
+      ign_cs (write_payload ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc)) ;
+      succ i
+      end 0 tx.inputs inputs in
+    ()
   | _ -> invalid_arg "unsupported input type"
 
 let hash_tx_finalize_full ?buf h (tx : Bitcoin.Protocol.Transaction.t) =
@@ -565,12 +594,8 @@ let hash_tx_finalize_full ?buf h (tx : Bitcoin.Protocol.Transaction.t) =
   let cs = Cstruct.create 100000 in
   let cs' = Util.CompactSize.to_cstruct_int cs (List.length tx.outputs) in
   let cs' = List.fold_left Protocol.TxOut.to_cstruct cs' tx.outputs in
-  let res =
-    write_payload ~msg:"hash_tx_finalize_full" ~finalize_full:true
-      ?buf h ~ins:Hash_input_finalize_full (Cstruct.sub cs 0 cs'.off) in
-  match Cstruct.get_uint8 res 0 with
-  | 0x00 -> false
-  | _ -> true
+  write_payload ~msg:"hash_tx_finalize_full" ~finalize_full:true
+    ?buf h ~ins:Hash_input_finalize_full (Cstruct.sub cs 0 cs'.off)
 
 module HashType = struct
   type typ =
@@ -583,6 +608,12 @@ module HashType = struct
     | None -> 2
     | Single -> 3
 
+  let typ_of_int = function
+    | 1 -> All
+    | 2 -> None
+    | 3 -> Single
+    | _ -> invalid_arg "HashType.typ_of_int"
+
   type flag =
     | ForkId
     | AnyoneCanPay
@@ -590,6 +621,13 @@ module HashType = struct
   let int_of_flag = function
     | ForkId -> 0x40
     | AnyoneCanPay -> 0x80
+
+  let flags_of_int i =
+    let forkid = i land 0x40 <> 0 in
+    let anyonecanpay = i land 0x80 <> 0 in
+    ListLabels.fold_left ~init:[] ~f:begin fun a (flag, is_present) ->
+      if is_present then flag :: a else a
+    end [ForkId, forkid ; AnyoneCanPay, anyonecanpay]
 
   type t = {
     typ: typ ;
@@ -602,6 +640,9 @@ module HashType = struct
     List.fold_left begin fun a flag ->
       a lor (int_of_flag flag)
     end (int_of_typ typ) flags
+
+  let of_int i =
+    { typ = typ_of_int i ; flags = flags_of_int i }
 end
 
 let hash_sign ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transaction.t) =
@@ -616,27 +657,47 @@ let hash_sign ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transac
   Cstruct.set_uint8 cs' 0 0 ;
   Cstruct.BE.set_uint32 cs' 1 (Protocol.Transaction.LockTime.to_int32 tx.lock_time) ;
   Cstruct.set_uint8 cs' 5 HashType.(create hash_type hash_flags |> to_int) ;
-  Transport.apdu ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign))
+  assert (cs'.off + 6 = lc) ;
+  let res = Transport.apdu ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign)) in
+  let res_len = Cstruct.len res in
+  Cstruct.set_uint8 res 0 0x30 ;
+  Cstruct.sub res 0 (res_len - 1),
+  HashType.of_int (Cstruct.get_uint8 res (res_len - 1))
 
-module Bch = struct
-  let sign ?buf ~path h (tx : Bitcoin.Protocol.Transaction.t) prev_amounts =
-    let nb_prev_amounts = List.length prev_amounts in
-    let nb_inputs = List.length tx.inputs in
-    if nb_prev_amounts <> nb_inputs then invalid_arg
-        (Printf.sprintf "Bch.sign: prev_amounts do not match inputs (%d inputs vs %d amounts)"
-           nb_inputs nb_prev_amounts) ;
-    let open Bitcoin.Protocol in
-    hash_tx_input_start
-      ?buf ~new_transaction:true ~input_type:(Segwit prev_amounts) h tx ;
-    let _pin_required = hash_tx_finalize_full ?buf h tx in
-    ListLabels.map2 tx.inputs prev_amounts ~f:begin fun txi prev_amount ->
-      let virtual_tx = { tx with inputs = [txi] } in
-      hash_tx_input_start ?buf h virtual_tx
-        ~new_transaction:false
-        ~input_type:(Segwit [prev_amount]) ;
-      let signature =
-        hash_sign ?buf ~path ~hash_type:All ~hash_flags:[ForkId] h virtual_tx in
-      Cstruct.set_uint8 signature 0 0x30 ;
-      signature
-    end
-end
+let sign ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
+  let trusted_inputs =
+    ListLabels.map prev_outputs ~f:(fun (tx, i) -> get_trusted_input ?buf h tx i) in
+  ListLabels.iter trusted_inputs ~f:(fun input -> assert (Cstruct.len input = 56)) ;
+  let _, signatures =
+    ListLabels.fold_left ~init:(0, []) tx.inputs ~f:begin fun (i, acc) _ ->
+      hash_tx_input_start ?buf
+        ~new_transaction:(i = 0)
+        ~input_type:(Trusted trusted_inputs) h tx i ;
+      let _ret = hash_tx_finalize_full ?buf h tx in
+      let signature, _hash_type =
+        hash_sign ?buf ~path ~hash_type:All ~hash_flags:[] h tx in
+      succ i, signature :: acc
+    end in
+  signatures
+
+let sign_segwit ?(bch=false) ?buf ~path ~prev_amounts h (tx : Bitcoin.Protocol.Transaction.t) =
+  let nb_prev_amounts = List.length prev_amounts in
+  let nb_inputs = List.length tx.inputs in
+  if nb_prev_amounts <> nb_inputs then invalid_arg
+      (Printf.sprintf "Bch.sign: prev_amounts do not match inputs (%d inputs vs %d amounts)"
+         nb_inputs nb_prev_amounts) ;
+  let open Bitcoin.Protocol in
+  hash_tx_input_start
+    ?buf ~new_transaction:true ~input_type:(Segwit prev_amounts) h tx 0 ;
+  let _pin_required = hash_tx_finalize_full ?buf h tx in
+  ListLabels.map2 tx.inputs prev_amounts ~f:begin fun txi prev_amount ->
+    let virtual_tx = { tx with inputs = [txi] ; outputs = [] } in
+    hash_tx_input_start ?buf
+      ~new_transaction:false
+      ~input_type:(Segwit [prev_amount]) h virtual_tx 0 ;
+    let hash_flags = if bch then [HashType.ForkId] else [] in
+    let signature, _hash_type =
+      hash_sign ?buf ~path ~hash_type:All ~hash_flags h virtual_tx in
+    signature
+  end
+

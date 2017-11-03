@@ -36,6 +36,7 @@ module Firmware_version : sig
     patch : int ;
     loader_major : int ;
     loader_minor : int ;
+    loader_patch : int ;
   } [@@deriving sexp]
 end
 
@@ -66,10 +67,10 @@ type input_type =
 
 val hash_tx_input_start :
   ?buf:Cstruct.t -> new_transaction:bool -> input_type:input_type -> Hidapi.hid_device ->
-  Bitcoin.Protocol.Transaction.t -> unit
+  Bitcoin.Protocol.Transaction.t -> int -> unit
 
 val hash_tx_finalize_full :
-  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> bool
+  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
 
 module HashType : sig
   type typ =
@@ -80,15 +81,28 @@ module HashType : sig
   type flag =
     | ForkId
     | AnyoneCanPay
+
+  type t = {
+    typ: typ ;
+    flags: flag list ;
+  }
 end
 
 val hash_sign :
   ?buf:Cstruct.t -> path:Bitcoin.Util.KeyPath.t ->
   hash_type:HashType.typ -> hash_flags:HashType.flag list ->
-  Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
+  Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t * HashType.t
 
-module Bch : sig
-  val sign :
-    ?buf:Cstruct.t -> path:Bitcoin.Util.KeyPath.t -> Hidapi.hid_device ->
-    Bitcoin.Protocol.Transaction.t -> Int64.t list -> Cstruct.t list
-end
+val sign :
+  ?buf:Cstruct.t ->
+  path:Bitcoin.Util.KeyPath.t ->
+  prev_outputs:(Bitcoin.Protocol.Transaction.t * int) list ->
+  Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t list
+
+val sign_segwit :
+  ?bch:bool ->
+  ?buf:Cstruct.t ->
+  path:Bitcoin.Util.KeyPath.t ->
+  prev_amounts:Int64.t list ->
+  Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t list
+
