@@ -42,9 +42,9 @@ end
 
 module Public_key : sig
   type t = {
-    uncompressed : string ;
+    uncompressed : Cstruct.t ;
     b58addr : string ;
-    bip32_chaincode : string ;
+    bip32_chaincode : Cstruct.t ;
   } [@@deriving sexp]
 end
 

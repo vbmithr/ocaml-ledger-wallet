@@ -449,9 +449,9 @@ let get_remaining_pin_attempts ?buf h =
 
 module Public_key = struct
   type t = {
-    uncompressed : string ;
+    uncompressed : Cstruct.t ;
     b58addr : string ;
-    bip32_chaincode : string ;
+    bip32_chaincode : Cstruct.t ;
   } [@@deriving sexp]
 
   let create ~uncompressed ~b58addr ~bip32_chaincode = {
@@ -460,13 +460,13 @@ module Public_key = struct
 
   let of_cstruct cs =
     let keylen = Cstruct.get_uint8 cs 0 in
-    let uncompressed = Bytes.create keylen in
-    Cstruct.blit_to_bytes cs 1 uncompressed 0 keylen ;
+    let uncompressed = Cstruct.create keylen in
+    Cstruct.blit cs 1 uncompressed 0 keylen ;
     let addrlen = Cstruct.get_uint8 cs (1+keylen) in
     let b58addr = Bytes.create addrlen in
     Cstruct.blit_to_bytes cs (1+keylen+1) b58addr 0 addrlen ;
-    let bip32_chaincode = Bytes.create 32 in
-    Cstruct.blit_to_bytes cs (1+keylen+1+addrlen) bip32_chaincode 0 32 ;
+    let bip32_chaincode = Cstruct.create 32 in
+    Cstruct.blit cs (1+keylen+1+addrlen) bip32_chaincode 0 32 ;
     create ~uncompressed ~b58addr ~bip32_chaincode,
     Cstruct.shift cs (1+keylen+1+addrlen+32)
 end

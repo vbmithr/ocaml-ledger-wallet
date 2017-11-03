@@ -41,16 +41,16 @@ let main () =
   Printf.printf "%d %S\n" (String.length random_str) random_str ;
   let pk = get_wallet_pubkeys h path in
   let pk_computed =
-    Secp256k1.Public.of_bytes_exn ctx Cstruct.(of_string pk.uncompressed).buffer in
+    Secp256k1.Public.of_bytes_exn ctx pk.uncompressed.buffer in
   let addr_computed = Bitcoin.Wallet.Address.of_pubkey ctx pk_computed in
-  let `Hex uncomp = Hex.of_string pk.uncompressed in
+  let `Hex uncomp = Hex.of_cstruct pk.uncompressed in
   Printf.printf "Uncompressed public key %s\n%!" uncomp ;
   Printf.printf "Address %s\n%!" pk.b58addr ;
   Format.printf "Address computed %a\n%!" Base58.Bitcoin.pp addr_computed ;
   let addr_computed_testnet =
     Base58.Bitcoin.create ~version:Testnet_P2PKH ~payload:addr_computed.payload in
   Format.printf "Address computed %a\n%!" Base58.Bitcoin.pp addr_computed_testnet ;
-  let `Hex chaincode = Hex.of_string pk.bip32_chaincode in
+  let `Hex chaincode = Hex.of_cstruct pk.bip32_chaincode in
   Printf.printf "Chaincode %s\n%!" chaincode ;
   let `Hex ti = Hex.of_cstruct (get_trusted_input h prevTx 0) in
   Printf.printf "Trusted input %s\n%!" ti ;
