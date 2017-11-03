@@ -21,7 +21,7 @@ let nextTx =
 
 let main () =
   let h = Hidapi.hid_open ~vendor_id:0x2C97 ~product_id:0x0001 in
-  let path = Bitcoin.Util.KeyPath.[H 44l; H 1l; H 0l; N 0l; N 0l] in
+  let path = Bitcoin.Wallet.KeyPath.[H 44l; H 1l; H 0l; N 0l; N 0l] in
   Ledgerwallet.ping h ;
   (* begin match verify_pin h "0000" with
    * | `Ok -> Printf.printf "Pin OK\n"

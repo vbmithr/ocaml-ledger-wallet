@@ -479,7 +479,7 @@ let get_wallet_pubkeys ?buf h keyPath =
   Cstruct.memset data_init 0 ;
   Cstruct.set_uint8 data_init 0 nb_derivations ;
   let data = Cstruct.shift data_init 1 in
-  let _data = Bitcoin.Util.KeyPath.write_be_cstruct data keyPath in
+  let _data = Bitcoin.Wallet.KeyPath.write_be_cstruct data keyPath in
   let b = Transport.apdu ?buf h Apdu.(create ~lc ~data:data_init (Cla Get_wallet_public_key)) in
   fst (Public_key.of_cstruct b)
 
@@ -653,7 +653,7 @@ let hash_sign ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transac
   let cs = Cstruct.create lc in
   Cstruct.memset cs 0 ;
   Cstruct.set_uint8 cs 0 nb_derivations ;
-  let cs' = Bitcoin.Util.KeyPath.write_be_cstruct (Cstruct.shift cs 1) path in
+  let cs' = Bitcoin.Wallet.KeyPath.write_be_cstruct (Cstruct.shift cs 1) path in
   Cstruct.set_uint8 cs' 0 0 ;
   Cstruct.BE.set_uint32 cs' 1 (Protocol.Transaction.LockTime.to_int32 tx.lock_time) ;
   Cstruct.set_uint8 cs' 5 HashType.(create hash_type hash_flags |> to_int) ;

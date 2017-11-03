@@ -56,7 +56,7 @@ val get_firmware_version : ?buf:Cstruct.t -> Hidapi.hid_device -> Firmware_versi
 val verify_pin : ?buf:Cstruct.t -> Hidapi.hid_device -> string -> [`Ok | `Need_power_cycle]
 val get_remaining_pin_attempts : ?buf:Cstruct.t -> Hidapi.hid_device -> int
 val get_wallet_pubkeys :
-  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Util.KeyPath.t -> Public_key.t
+  ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Wallet.KeyPath.t -> Public_key.t
 val get_trusted_input :
   ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> int -> Cstruct.t
 
@@ -89,20 +89,20 @@ module HashType : sig
 end
 
 val hash_sign :
-  ?buf:Cstruct.t -> path:Bitcoin.Util.KeyPath.t ->
+  ?buf:Cstruct.t -> path:Bitcoin.Wallet.KeyPath.t ->
   hash_type:HashType.typ -> hash_flags:HashType.flag list ->
   Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t * HashType.t
 
 val sign :
   ?buf:Cstruct.t ->
-  path:Bitcoin.Util.KeyPath.t ->
+  path:Bitcoin.Wallet.KeyPath.t ->
   prev_outputs:(Bitcoin.Protocol.Transaction.t * int) list ->
   Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t list
 
 val sign_segwit :
   ?bch:bool ->
   ?buf:Cstruct.t ->
-  path:Bitcoin.Util.KeyPath.t ->
+  path:Bitcoin.Wallet.KeyPath.t ->
   prev_amounts:Int64.t list ->
   Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t list
 
