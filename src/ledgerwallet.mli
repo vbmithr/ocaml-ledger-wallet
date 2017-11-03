@@ -91,7 +91,7 @@ end
 val hash_sign :
   ?buf:Cstruct.t -> path:Bitcoin.Wallet.KeyPath.t ->
   hash_type:HashType.typ -> hash_flags:HashType.flag list ->
-  Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t * HashType.t
+  Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
 
 val sign :
   ?buf:Cstruct.t ->

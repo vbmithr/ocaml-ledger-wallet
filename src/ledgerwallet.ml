@@ -658,11 +658,9 @@ let hash_sign ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transac
   Cstruct.BE.set_uint32 cs' 1 (Protocol.Transaction.LockTime.to_int32 tx.lock_time) ;
   Cstruct.set_uint8 cs' 5 HashType.(create hash_type hash_flags |> to_int) ;
   assert (cs'.off + 6 = lc) ;
-  let res = Transport.apdu ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign)) in
-  let res_len = Cstruct.len res in
-  Cstruct.set_uint8 res 0 0x30 ;
-  Cstruct.sub res 0 (res_len - 1),
-  HashType.of_int (Cstruct.get_uint8 res (res_len - 1))
+  let signature = Transport.apdu ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign)) in
+  Cstruct.set_uint8 signature 0 0x30 ;
+  signature
 
 let sign ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
   let trusted_inputs =
@@ -674,7 +672,7 @@ let sign ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
         ~new_transaction:(i = 0)
         ~input_type:(Trusted trusted_inputs) h tx i ;
       let _ret = hash_tx_finalize_full ?buf h tx in
-      let signature, _hash_type =
+      let signature =
         hash_sign ?buf ~path ~hash_type:All ~hash_flags:[] h tx in
       succ i, signature :: acc
     end in
@@ -696,7 +694,7 @@ let sign_segwit ?(bch=false) ?buf ~path ~prev_amounts h (tx : Bitcoin.Protocol.T
       ~new_transaction:false
       ~input_type:(Segwit [prev_amount]) h virtual_tx 0 ;
     let hash_flags = if bch then [HashType.ForkId] else [] in
-    let signature, _hash_type =
+    let signature =
       hash_sign ?buf ~path ~hash_type:All ~hash_flags h virtual_tx in
     signature
   end
