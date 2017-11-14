@@ -60,7 +60,7 @@ val get_second_factor : ?buf:Cstruct.t -> Hidapi.hid_device -> Second_factor.t
 val get_firmware_version : ?buf:Cstruct.t -> Hidapi.hid_device -> Firmware_version.t
 val verify_pin : ?buf:Cstruct.t -> Hidapi.hid_device -> string -> [`Ok | `Need_power_cycle]
 val get_remaining_pin_attempts : ?buf:Cstruct.t -> Hidapi.hid_device -> int
-val get_wallet_pubkeys :
+val get_wallet_public_key :
   ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Wallet.KeyPath.t -> Public_key.t
 val get_trusted_input :
   ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> int -> Cstruct.t

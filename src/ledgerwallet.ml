@@ -476,7 +476,7 @@ module Public_key = struct
     Cstruct.shift cs (1+keylen+1+addrlen+32)
 end
 
-let get_wallet_pubkeys ?buf h keyPath =
+let get_wallet_public_key ?buf h keyPath =
   let nb_derivations = List.length keyPath in
   if nb_derivations > 10 then invalid_arg "get_wallet_pubkeys: max 10 derivations" ;
   let lc = 1 + 4 * nb_derivations in

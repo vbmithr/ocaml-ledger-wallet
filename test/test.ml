@@ -1,8 +1,9 @@
 open Ledgerwallet
+open Bitcoin.Protocol
 
 let ctx = Secp256k1.Context.create []
-let prevTx = `Hex "0100000001c3798bf6520ac4e95e24c587b6ee25a1c492f33ddd35615f90f38d89e8e2b47c010000006b483045022100dc48cef9d3e1eb71e84bcf51ceaf7f938328573e482bf8af951e9b53e87a74c802206280177d6ac07455d9984a8dd62f8d9f87c91884820c9fa587c8ada46750a44d4121032af552f85308e3c68c9751c415a5efe01fc165a955e48835a84894ab9986b149ffffffff02005ed0b2000000001976a914c78d002920f40f471846083f4283eae42246035988acb0cecff5150000001976a9147e854f6a0d4b20f61ba91ab0aa8e1f6f428e628e88ac00000000"
-let prevTx = fst (Bitcoin.Protocol.Transaction.of_cstruct (Hex.to_cstruct prevTx))
+let prevTx = Transaction.of_hex (`Hex "0100000001c3798bf6520ac4e95e24c587b6ee25a1c492f33ddd35615f90f38d89e8e2b47c010000006b483045022100dc48cef9d3e1eb71e84bcf51ceaf7f938328573e482bf8af951e9b53e87a74c802206280177d6ac07455d9984a8dd62f8d9f87c91884820c9fa587c8ada46750a44d4121032af552f85308e3c68c9751c415a5efe01fc165a955e48835a84894ab9986b149ffffffff02005ed0b2000000001976a914c78d002920f40f471846083f4283eae42246035988acb0cecff5150000001976a9147e854f6a0d4b20f61ba91ab0aa8e1f6f428e628e88ac00000000")
+let nextTx2 = Transaction.of_hex (`Hex "01000000018f514dcffb6242ff6c2b01aa888700dce343f57e265e72c9fb46607065ffad48000000001976a914b2483f8a51043dca4144748f91e45e83e473730d88acffffffff01e0567b4d000000005d14cf244fd81c2d7cee628190f75b48ca621cbf3fcc75522102e8f164c9c12b039d3e522aa291e3544ddc99240a878080669aee1c359f66d2532103c6ad7f526553affb3979483dac278b1517199a5ac3cd0fbb669644aadbf933ba52ae00000000")
 
 let nextTx =
   let open Bitcoin in
@@ -39,7 +40,7 @@ let main () =
    *   (Sexplib.Sexp.to_string_hum (Second_factor.sexp_of_t second_factor)) ; *)
   let random_str = Ledgerwallet.get_random h 200 in
   Printf.printf "%d %S\n" (String.length random_str) random_str ;
-  let pk = get_wallet_pubkeys h path in
+  let pk = get_wallet_public_key h path in
   let pk_computed =
     Secp256k1.Public.of_bytes_exn ctx pk.uncompressed.buffer in
   let pk_compressed = Secp256k1.Public.to_bytes ctx pk_computed |> Cstruct.of_bigarray in
@@ -56,7 +57,10 @@ let main () =
   let `Hex ti = Hex.of_cstruct (get_trusted_input h prevTx 0) in
   Printf.printf "Trusted input %s\n%!" ti ;
   Format.printf "%a@." Bitcoin.Protocol.Transaction.pp nextTx ;
-  let bch_signatures = sign_segwit ~bch:true ~path ~prev_amounts:[3000000000L] h nextTx in
+  let bch_signatures =
+    sign_segwit ~bch:true ~path ~prev_amounts:[3000000000L] h nextTx in
+  (* let bch_signatures =
+   *   sign_segwit ~bch:true ~path ~prev_amounts:[1300000000L] h nextTx2 in *)
   Printf.printf "Got %d BCH signatures.\n%!" (List.length bch_signatures) ;
   (* let signatures = sign ~path ~prev_outputs:[prevTx, 0] h nextTx in
    * Printf.printf "Got %d signatures.\n%!" (List.length signatures) ; *)
