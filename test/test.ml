@@ -42,7 +42,7 @@ let main () =
   Printf.printf "%d %S\n" (String.length random_str) random_str ;
   let pk = get_wallet_public_key h path in
   let pk_computed =
-    Secp256k1.Public.of_bytes_exn ctx pk.uncompressed.buffer in
+    Secp256k1.Public.read_exn ctx pk.uncompressed.buffer in
   let pk_compressed = Secp256k1.Public.to_bytes ctx pk_computed |> Cstruct.of_bigarray in
   let addr_computed = Bitcoin.Wallet.Address.of_pubkey ctx pk_computed in
   let `Hex uncomp = Hex.of_cstruct pk.uncompressed in
