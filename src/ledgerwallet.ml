@@ -35,6 +35,11 @@ module Status = struct
 
   let to_string t =
     Sexplib.Sexp.to_string_hum (sexp_of_t t)
+
+  let show t = to_string t
+
+  let pp ppf t =
+    Format.pp_print_string ppf (to_string t)
 end
 
 module Apdu = struct
@@ -241,11 +246,17 @@ module Transport = struct
     if nb_written <> packet_length then failwith "Transport.write_ping"
 
   let write_apdu
+      ?pp
       ?(buf=Cstruct.create packet_length)
       h ({ Apdu.cmd ; p1 ; p2 ; lc ; le ; data } as p) =
     let apdu_len = Apdu.length p in
     let apdu_buf = Cstruct.create apdu_len in
     let _nb_written = Apdu.write apdu_buf p in
+    begin match pp with
+      | None -> ()
+      | Some pp ->
+        Format.fprintf pp "-> %a@." Cstruct.hexdump_pp apdu_buf
+    end ;
     let apdu_p = ref 0 in (* pos in the apdu buf *)
     let i = ref 0 in (* packet id *)
     let open Cstruct in
@@ -322,11 +333,23 @@ module Transport = struct
     | Status.Ok, _ -> ()
     | s, _ -> failwith ((Status.to_string s) ^ " " ^ msg)
 
-  let apdu ?(msg="") ?buf h apdu =
-    write_apdu ?buf h apdu ;
+  let apdu ?pp ?(msg="") ?buf h apdu =
+    write_apdu ?pp ?buf h apdu ;
     match read ?buf h with
-    | Status.Ok, payload -> payload
-    | s, _ -> failwith ((Status.to_string s) ^ " " ^ msg)
+    | Status.Ok, payload ->
+      begin match pp with
+        | None -> ()
+        | Some pp ->
+          Format.fprintf pp "<- %a %a@." Status.pp Status.Ok Cstruct.hexdump_pp payload
+      end ;
+      payload
+    | s, payload ->
+      begin match pp with
+        | None -> ()
+        | Some pp ->
+          Format.fprintf pp "<- %a %a@." Status.pp s Cstruct.hexdump_pp payload
+      end ;
+      failwith ((Status.to_string s) ^ " " ^ msg)
 end
 
 let ping ?buf h = Transport.ping ?buf h
@@ -352,7 +375,7 @@ module Operation_mode = struct
     | _ -> invalid_arg "Operation_mode.mode_of_int"
 
   type t = {
-    mode : mode ;
+   mode : mode ;
     seed_not_redeemed : bool ;
   } [@@deriving sexp]
 
@@ -476,7 +499,7 @@ module Public_key = struct
     Cstruct.shift cs (1+keylen+1+addrlen+32)
 end
 
-let get_wallet_public_key ?buf h keyPath =
+let get_wallet_public_key ?pp ?buf h keyPath =
   let nb_derivations = List.length keyPath in
   if nb_derivations > 10 then invalid_arg "get_wallet_pubkeys: max 10 derivations" ;
   let lc = 1 + 4 * nb_derivations in
@@ -485,16 +508,17 @@ let get_wallet_public_key ?buf h keyPath =
   Cstruct.set_uint8 data_init 0 nb_derivations ;
   let data = Cstruct.shift data_init 1 in
   let _data = Bitcoin.Wallet.KeyPath.write_be_cstruct data keyPath in
-  let b = Transport.apdu ?buf h Apdu.(create ~lc ~data:data_init (Cla Get_wallet_public_key)) in
+  let b =
+    Transport.apdu ?pp ?buf h Apdu.(create ~lc ~data:data_init (Cla Get_wallet_public_key)) in
   fst (Public_key.of_cstruct b)
 
-let rec write_payload ?(finalize_full=false) ?buf ?(msg="write_payload") ~ins ?p1 ?p2 h cs =
+let rec write_payload ?pp ?(finalize_full=false) ?buf ?(msg="write_payload") ~ins ?p1 ?p2 h cs =
   let rec inner acc cs =
     let cs_len = Cstruct.len cs in
     let lc = min Apdu.max_data_length cs_len in
     let last = lc = cs_len in
     let p1 = if finalize_full && last then Some 0x80 else p1 in
-    let acc = Transport.apdu ~msg ?buf h
+    let acc = Transport.apdu ?pp ~msg ?buf h
         Apdu.(create ?p1 ?p2 ~lc ~data:(Cstruct.sub cs 0 lc) (Cla ins)) in
     if last then acc
     else inner acc (Cstruct.shift cs lc) in
@@ -502,7 +526,7 @@ let rec write_payload ?(finalize_full=false) ?buf ?(msg="write_payload") ~ins ?p
 
 let ign_cs cs = ignore (cs : Cstruct.t)
 
-let get_trusted_input ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
+let get_trusted_input ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
   let open Bitcoin in
   let ins = Apdu.Get_trusted_input in
   let cs = Cstruct.create 100000 in
@@ -510,7 +534,7 @@ let get_trusted_input ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
   Cstruct.LE.set_uint32 cs 4 (Int32.of_int tx.version) ;
   let cs' =
     Util.CompactSize.to_cstruct_int (Cstruct.shift cs 8) (List.length tx.inputs) in
-  ign_cs (write_payload ~ins ?buf ~msg:"init" h (Cstruct.sub cs 0 cs'.off)) ;
+  ign_cs (write_payload ?pp ~ins ?buf ~msg:"init" h (Cstruct.sub cs 0 cs'.off)) ;
   let p1 = 0x80 in
   ListLabels.iter tx.inputs ~f:begin fun txi ->
     let cs' = Protocol.TxIn.to_cstruct cs txi in
@@ -518,20 +542,20 @@ let get_trusted_input ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
     | len when len > 0 && len < 4 ->
       let cs1 = Cstruct.sub cs 0 (cs'.off - 4) in
       let cs2 = Cstruct.sub cs (cs'.off - 4) 4 in
-      ign_cs (write_payload ~p1 ~ins h cs1 ~msg:"partial in 1") ;
-      ign_cs (write_payload ~p1 ~ins h cs2 ~msg:"partial in 2")
+      ign_cs (write_payload ?pp ~p1 ~ins h cs1 ~msg:"partial in 1") ;
+      ign_cs (write_payload ?pp ~p1 ~ins h cs2 ~msg:"partial in 2")
     | _ ->
-      let _ = write_payload ~p1 ~ins h ~msg:"complete in" (Cstruct.sub cs 0 cs'.off) in
+      let _ = write_payload ?pp ~p1 ~ins h ~msg:"complete in" (Cstruct.sub cs 0 cs'.off) in
       ()
   end ;
   let cs' = Util.CompactSize.to_cstruct_int cs (List.length tx.outputs) in
-  ign_cs (write_payload ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"out len") ;
+  ign_cs (write_payload ?pp ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"out len") ;
   ListLabels.iter tx.outputs ~f:begin fun txo ->
     let cs' = Protocol.TxOut.to_cstruct cs txo in
-    ign_cs (write_payload ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"out")
+    ign_cs (write_payload ?pp ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"out")
   end ;
   let cs' = Protocol.Transaction.LockTime.to_cstruct cs tx.lock_time in
-  write_payload ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"locktime"
+  write_payload ?pp ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"locktime"
 
 type input_type =
   | Untrusted
@@ -539,7 +563,7 @@ type input_type =
   | Segwit of Int64.t list
 
 let hash_tx_input_start
-    ?buf ~new_transaction ~input_type h (tx : Bitcoin.Protocol.Transaction.t) index =
+    ?pp ?buf ~new_transaction ~input_type h (tx : Bitcoin.Protocol.Transaction.t) index =
   let open Bitcoin in
   let open Bitcoin.Util in
   let open Bitcoin.Protocol in
@@ -552,7 +576,7 @@ let hash_tx_input_start
   let cs' =
     Bitcoin.Util.CompactSize.to_cstruct_int (Cstruct.shift cs 4) (List.length tx.inputs) in
   let lc = cs'.off in
-  ign_cs (write_payload ?buf h ~ins:Hash_input_start ~p2 (Cstruct.sub cs 0 lc)) ;
+  ign_cs (write_payload ?pp ?buf h ~ins:Hash_input_start ~p2 (Cstruct.sub cs 0 lc)) ;
   match input_type with
   | Segwit amounts ->
     List.iter2 begin fun { TxIn.prev_out ; script ; seq } amount ->
@@ -569,7 +593,7 @@ let hash_tx_input_start
       in
       Cstruct.LE.set_uint32 cs' 0 seq ;
       let lc = cs'.off + 4 in
-      ign_cs (write_payload ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc))
+      ign_cs (write_payload ?pp ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc))
     end tx.inputs amounts
   | Trusted inputs ->
     let _ = List.fold_left2 begin fun i { TxIn.prev_out ; script ; seq } input ->
@@ -588,18 +612,18 @@ let hash_tx_input_start
       in
       Cstruct.LE.set_uint32 cs' 0 seq ;
       let lc = cs'.off + 4 in
-      ign_cs (write_payload ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc)) ;
+      ign_cs (write_payload ?pp ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc)) ;
       succ i
       end 0 tx.inputs inputs in
     ()
   | _ -> invalid_arg "unsupported input type"
 
-let hash_tx_finalize_full ?buf h (tx : Bitcoin.Protocol.Transaction.t) =
+let hash_tx_finalize_full ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) =
   let open Bitcoin in
   let cs = Cstruct.create 100000 in
   let cs' = Util.CompactSize.to_cstruct_int cs (List.length tx.outputs) in
   let cs' = List.fold_left Protocol.TxOut.to_cstruct cs' tx.outputs in
-  write_payload ~msg:"hash_tx_finalize_full" ~finalize_full:true
+  write_payload ?pp ~msg:"hash_tx_finalize_full" ~finalize_full:true
     ?buf h ~ins:Hash_input_finalize_full (Cstruct.sub cs 0 cs'.off)
 
 module HashType = struct
@@ -650,7 +674,7 @@ module HashType = struct
     { typ = typ_of_int (i land 0x07) ; flags = flags_of_int i }
 end
 
-let hash_sign ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transaction.t) =
+let hash_sign ?pp ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transaction.t) =
   let open Bitcoin in
   let nb_derivations = List.length path in
   if nb_derivations > 10 then invalid_arg "hash_sign: max 10 derivations" ;
@@ -663,27 +687,28 @@ let hash_sign ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transac
   Cstruct.BE.set_uint32 cs' 1 (Protocol.Transaction.LockTime.to_int32 tx.lock_time) ;
   Cstruct.set_uint8 cs' 5 HashType.(create hash_type hash_flags |> to_int) ;
   assert (cs'.off + 6 = lc) ;
-  let signature = Transport.apdu ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign)) in
+  let signature =
+    Transport.apdu ?pp ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign)) in
   Cstruct.set_uint8 signature 0 0x30 ;
   signature
 
-let sign ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
+let sign ?pp ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
   let trusted_inputs =
     ListLabels.map prev_outputs ~f:(fun (tx, i) -> get_trusted_input ?buf h tx i) in
   ListLabels.iter trusted_inputs ~f:(fun input -> assert (Cstruct.len input = 56)) ;
   let _, signatures =
     ListLabels.fold_left ~init:(0, []) tx.inputs ~f:begin fun (i, acc) _ ->
-      hash_tx_input_start ?buf
+      hash_tx_input_start ?pp ?buf
         ~new_transaction:(i = 0)
         ~input_type:(Trusted trusted_inputs) h tx i ;
-      let _ret = hash_tx_finalize_full ?buf h tx in
+      let _ret = hash_tx_finalize_full ?pp ?buf h tx in
       let signature =
-        hash_sign ?buf ~path ~hash_type:All ~hash_flags:[] h tx in
+        hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags:[] h tx in
       succ i, signature :: acc
     end in
   signatures
 
-let sign_segwit ?(bch=false) ?buf ~path ~prev_amounts h (tx : Bitcoin.Protocol.Transaction.t) =
+let sign_segwit ?pp ?(bch=false) ?buf ~path ~prev_amounts h (tx : Bitcoin.Protocol.Transaction.t) =
   let nb_prev_amounts = List.length prev_amounts in
   let nb_inputs = List.length tx.inputs in
   if nb_prev_amounts <> nb_inputs then invalid_arg
@@ -691,16 +716,16 @@ let sign_segwit ?(bch=false) ?buf ~path ~prev_amounts h (tx : Bitcoin.Protocol.T
          nb_inputs nb_prev_amounts) ;
   let open Bitcoin.Protocol in
   hash_tx_input_start
-    ?buf ~new_transaction:true ~input_type:(Segwit prev_amounts) h tx 0 ;
-  let _pin_required = hash_tx_finalize_full ?buf h tx in
+    ?pp ?buf ~new_transaction:true ~input_type:(Segwit prev_amounts) h tx 0 ;
+  let _pin_required = hash_tx_finalize_full ?pp ?buf h tx in
   ListLabels.map2 tx.inputs prev_amounts ~f:begin fun txi prev_amount ->
     let virtual_tx = { tx with inputs = [txi] ; outputs = [] } in
-    hash_tx_input_start ?buf
+    hash_tx_input_start ?pp ?buf
       ~new_transaction:false
       ~input_type:(Segwit [prev_amount]) h virtual_tx 0 ;
     let hash_flags = if bch then [HashType.ForkId] else [] in
     let signature =
-      hash_sign ?buf ~path ~hash_type:All ~hash_flags h virtual_tx in
+      hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags h virtual_tx in
     signature
   end
 

@@ -61,8 +61,10 @@ val get_firmware_version : ?buf:Cstruct.t -> Hidapi.hid_device -> Firmware_versi
 val verify_pin : ?buf:Cstruct.t -> Hidapi.hid_device -> string -> [`Ok | `Need_power_cycle]
 val get_remaining_pin_attempts : ?buf:Cstruct.t -> Hidapi.hid_device -> int
 val get_wallet_public_key :
+  ?pp:Format.formatter ->
   ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Wallet.KeyPath.t -> Public_key.t
 val get_trusted_input :
+  ?pp:Format.formatter ->
   ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> int -> Cstruct.t
 
 type input_type =
@@ -71,10 +73,12 @@ type input_type =
   | Segwit of Int64.t list
 
 val hash_tx_input_start :
+  ?pp:Format.formatter ->
   ?buf:Cstruct.t -> new_transaction:bool -> input_type:input_type -> Hidapi.hid_device ->
   Bitcoin.Protocol.Transaction.t -> int -> unit
 
 val hash_tx_finalize_full :
+  ?pp:Format.formatter ->
   ?buf:Cstruct.t -> Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
 
 module HashType : sig
@@ -94,17 +98,20 @@ module HashType : sig
 end
 
 val hash_sign :
+  ?pp:Format.formatter ->
   ?buf:Cstruct.t -> path:Bitcoin.Wallet.KeyPath.t ->
   hash_type:HashType.typ -> hash_flags:HashType.flag list ->
   Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t
 
 val sign :
+  ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   path:Bitcoin.Wallet.KeyPath.t ->
   prev_outputs:(Bitcoin.Protocol.Transaction.t * int) list ->
   Hidapi.hid_device -> Bitcoin.Protocol.Transaction.t -> Cstruct.t list
 
 val sign_segwit :
+  ?pp:Format.formatter ->
   ?bch:bool ->
   ?buf:Cstruct.t ->
   path:Bitcoin.Wallet.KeyPath.t ->
