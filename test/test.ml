@@ -1,5 +1,6 @@
 open Ledgerwallet
 open Bitcoin.Protocol
+open Bitcoin.Util
 
 let ctx = Secp256k1.Context.create []
 let prevTx = Transaction.of_hex (`Hex "0100000001c3798bf6520ac4e95e24c587b6ee25a1c492f33ddd35615f90f38d89e8e2b47c010000006b483045022100dc48cef9d3e1eb71e84bcf51ceaf7f938328573e482bf8af951e9b53e87a74c802206280177d6ac07455d9984a8dd62f8d9f87c91884820c9fa587c8ada46750a44d4121032af552f85308e3c68c9751c415a5efe01fc165a955e48835a84894ab9986b149ffffffff02005ed0b2000000001976a914c78d002920f40f471846083f4283eae42246035988acb0cecff5150000001976a9147e854f6a0d4b20f61ba91ab0aa8e1f6f428e628e88ac00000000")
@@ -21,8 +22,9 @@ let nextTx =
   Transaction.create ~inputs:[input] ~outputs:[output] ()
 
 let main () =
-  let h = Hidapi.hid_open ~vendor_id:0x2C97 ~product_id:0x0001 in
-  let path = Bitcoin.Wallet.KeyPath.[H 44l; H 1l; H 0l; N 0l; N 0l] in
+  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
+  let path = Bitcoin.Wallet.KeyPath.[to_hardened 44l; to_hardened 1l;
+                                     to_hardened 0l; 0l; 0l] in
   Ledgerwallet.ping h ;
   (* begin match verify_pin h "0000" with
    * | `Ok -> Printf.printf "Pin OK\n"
@@ -42,16 +44,16 @@ let main () =
   Printf.printf "%d %S\n" (String.length random_str) random_str ;
   let pk = get_wallet_public_key h path in
   let pk_computed =
-    Secp256k1.Public.read_exn ctx pk.uncompressed.buffer in
-  let pk_compressed = Secp256k1.Public.to_bytes ctx pk_computed |> Cstruct.of_bigarray in
+    Secp256k1.Key.read_pk_exn ctx pk.uncompressed.buffer in
+  let pk_compressed = Secp256k1.Key.to_bytes ctx pk_computed |> Cstruct.of_bigarray in
   let addr_computed = Bitcoin.Wallet.Address.of_pubkey ctx pk_computed in
   let `Hex uncomp = Hex.of_cstruct pk.uncompressed in
   Printf.printf "Uncompressed public key %s\n%!" uncomp ;
   Printf.printf "Address %s\n%!" pk.b58addr ;
-  Format.printf "Address computed %a\n%!" Base58.Bitcoin.pp addr_computed ;
+  Format.printf "Address computed %a\n%!" (Base58.Bitcoin.pp c) addr_computed ;
   let addr_computed_testnet =
     Base58.Bitcoin.create ~version:Testnet_P2PKH ~payload:addr_computed.payload in
-  Format.printf "Address computed %a\n%!" Base58.Bitcoin.pp addr_computed_testnet ;
+  Format.printf "Address computed %a\n%!" (Base58.Bitcoin.pp c) addr_computed_testnet ;
   let `Hex chaincode = Hex.of_cstruct pk.bip32_chaincode in
   Printf.printf "Chaincode %s\n%!" chaincode ;
   let `Hex ti = Hex.of_cstruct (get_trusted_input h prevTx 0) in

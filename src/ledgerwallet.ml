@@ -241,9 +241,10 @@ module Transport = struct
     set_uint8 buf 2 ping ;
     BE.set_uint16 buf 3 0 ;
     memset (sub buf 5 59) 0 ;
-    let nb_written =
-      Hidapi.hid_write h (sub buf 0 packet_length) in
-    if nb_written <> packet_length then failwith "Transport.write_ping"
+    match Hidapi.write h (sub buf 0 packet_length) with
+    | Error msg -> failwith msg
+    | Ok nb_written when nb_written <> packet_length -> failwith "Transport.write_ping"
+    | _ -> ()
 
   let write_apdu
       ?pp
@@ -268,8 +269,12 @@ module Transport = struct
     BE.set_uint16 buf 5 apdu_len ;
     let nb_to_write = (min apdu_len (packet_length - 7)) in
     blit apdu_buf 0 buf 7 nb_to_write ;
-    let nb_written = Hidapi.hid_write h (sub buf 0 packet_length) in
-    if nb_written <> packet_length then failwith "Transport.write_apdu" ;
+    begin match Hidapi.write h (sub buf 0 packet_length) with
+    | Error msg -> failwith msg
+    | Ok nb_written when nb_written <> packet_length ->
+      failwith "Transport.write_apdu"
+    | _ -> ()
+    end ;
     apdu_p := !apdu_p + nb_to_write ;
     incr i ;
 
@@ -281,8 +286,12 @@ module Transport = struct
       BE.set_uint16 buf 3 !i ;
       let nb_to_write = (min (apdu_len - !apdu_p) (packet_length - 5)) in
       blit apdu_buf !apdu_p buf 5 nb_to_write ;
-      let nb_written = Hidapi.hid_write h (sub buf 0 packet_length) in
-      if nb_written <> packet_length then failwith "Transport.write_apdu" ;
+      begin match Hidapi.write h (sub buf 0 packet_length) with
+        | Error err -> failwith err
+        | Ok nb_written when nb_written <> packet_length ->
+          failwith "Transport.write_apdu"
+        | _ -> ()
+      end ;
       apdu_p := !apdu_p + nb_to_write ;
       incr i
     done
@@ -293,9 +302,12 @@ module Transport = struct
     let payload = ref (Cstruct.create 0) in
     (* let pos = ref 0 in *)
     let rec inner () =
-      let nb_read = Hidapi.hid_read ~timeout:600000 h buf packet_length in
-      if nb_read <> packet_length then
-        failwith (Printf.sprintf "Transport.read: read %d bytes" nb_read) ;
+      begin match Hidapi.read ~timeout:600000 h buf packet_length with
+        | Error err -> failwith err
+        | Ok nb_read when nb_read <> packet_length ->
+          failwith (Printf.sprintf "Transport.read: read %d bytes" nb_read)
+        | _ -> ()
+      end ;
       let hdr, buf = Header.read buf in
       Header.check_exn ~seq:!expected_seq hdr ;
       if hdr.seq = 0 then begin (* first frame *)
@@ -495,7 +507,10 @@ module Public_key = struct
     Cstruct.blit_to_bytes cs (1+keylen+1) b58addr 0 addrlen ;
     let bip32_chaincode = Cstruct.create 32 in
     Cstruct.blit cs (1+keylen+1+addrlen) bip32_chaincode 0 32 ;
-    create ~uncompressed ~b58addr ~bip32_chaincode,
+    create
+      ~uncompressed
+      ~b58addr:(Bytes.unsafe_to_string b58addr)
+      ~bip32_chaincode,
     Cstruct.shift cs (1+keylen+1+addrlen+32)
 end
 
