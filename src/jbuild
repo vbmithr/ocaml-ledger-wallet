@@ -3,7 +3,23 @@
 (library
  ((name        ledgerwallet)
   (public_name ledgerwallet)
-  (modules     (Apdu Transport Btc))
+  (modules     (Apdu Transport))
   (preprocess (pps (ppx_sexp_conv)))
-  (synopsis "Ledger wallet library for OCaml")
-  (libraries (result cstruct hidapi bitcoin))))
+  (synopsis "Ledger wallet library for OCaml: common parts")
+  (libraries (result cstruct hidapi))))
+
+(library
+ ((name        btc)
+  (public_name ledgerwallet-btc)
+  (modules     (Btc))
+  (preprocess (pps (ppx_sexp_conv)))
+  (synopsis "Ledger wallet library for OCaml: BTC app")
+  (libraries (ledgerwallet bitcoin))))
+
+(library
+ ((name        ssh_agent)
+  (public_name ledgerwallet-ssh-agent)
+  (modules     (Ssh_agent))
+  (preprocess (pps (ppx_sexp_conv)))
+  (synopsis "Ledger wallet library for OCaml: SSH agent app")
+  (libraries (ledgerwallet))))

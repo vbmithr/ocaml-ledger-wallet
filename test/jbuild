@@ -1,8 +1,19 @@
 (executable
- ((name test)
-  (libraries (alcotest ledgerwallet))))
+ ((name test_btc)
+  (modules (Test_btc))
+  (libraries (alcotest ledgerwallet-btc))))
+
+(executable
+ ((name test_ssh_agent)
+  (modules (Test_ssh_agent))
+  (libraries (hex alcotest ledgerwallet-ssh-agent))))
 
 (alias
  ((name    runtest-btc)
-  (deps    (test.exe))
+  (deps    (test_btc.exe))
+  (action  (run ${<}))))
+
+(alias
+ ((name    runtest)
+  (deps    (test_ssh_agent.exe))
   (action  (run ${<}))))

@@ -53,7 +53,6 @@ module Public_key : sig
   } [@@deriving sexp]
 end
 
-val ping : ?buf:Cstruct.t -> Hidapi.t -> unit
 val get_random : ?buf:Cstruct.t -> Hidapi.t -> int -> string
 val get_operation_mode : ?buf:Cstruct.t -> Hidapi.t -> Operation_mode.t
 val get_second_factor : ?buf:Cstruct.t -> Hidapi.t -> Second_factor.t

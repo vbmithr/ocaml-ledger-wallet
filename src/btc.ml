@@ -3,6 +3,7 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
+open Ledgerwallet
 open Sexplib.Std
 
 type ins =
@@ -123,8 +124,6 @@ let ins_of_cmd = function
 
 let wrap_ins ins = Apdu.create_cmd ~cmd:(Cla ins) ~cla_of_cmd ~ins_of_cmd
 let wrap_adm_ins ins = Apdu.create_cmd ~cmd:(Adm_cla ins) ~cla_of_cmd ~ins_of_cmd
-
-let ping ?buf h = Transport.ping ?buf h
 
 let get_random ?buf h len =
   let random_str =
@@ -279,7 +278,6 @@ let get_wallet_public_key ?pp ?buf h keyPath =
   if nb_derivations > 10 then invalid_arg "get_wallet_pubkeys: max 10 derivations" ;
   let lc = 1 + 4 * nb_derivations in
   let data_init = Cstruct.create lc in
-  Cstruct.memset data_init 0 ;
   Cstruct.set_uint8 data_init 0 nb_derivations ;
   let data = Cstruct.shift data_init 1 in
   let _data = Bitcoin.Wallet.KeyPath.write_be_cstruct data keyPath in
@@ -455,7 +453,6 @@ let hash_sign ?pp ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Tra
   if nb_derivations > 10 then invalid_arg "hash_sign: max 10 derivations" ;
   let lc = 1 + 4 * nb_derivations + 1 + 4 + 1 in
   let cs = Cstruct.create lc in
-  Cstruct.memset cs 0 ;
   Cstruct.set_uint8 cs 0 nb_derivations ;
   let cs' = Bitcoin.Wallet.KeyPath.write_be_cstruct (Cstruct.shift cs 1) path in
   Cstruct.set_uint8 cs' 0 0 ;

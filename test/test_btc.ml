@@ -1,4 +1,4 @@
-open Ledgerwallet.Btc
+open Btc
 open Bitcoin.Protocol
 open Bitcoin.Util
 
@@ -28,7 +28,7 @@ let test_open_close () =
 
 let test_ping () =
   let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  ping h ;
+  Ledgerwallet.Transport.ping h ;
   Hidapi.close h
 
 let test_get_info () =
