@@ -1,9 +1,8 @@
 (executable
  ((name test)
-  ;; (preprocess (pps (ppx_sexp_conv)))
   (libraries (alcotest ledgerwallet))))
 
 (alias
- ((name    runtest)
+ ((name    runtest-btc)
   (deps    (test.exe))
   (action  (run ${<}))))

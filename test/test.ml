@@ -1,4 +1,4 @@
-open Ledgerwallet
+open Ledgerwallet.Btc
 open Bitcoin.Protocol
 open Bitcoin.Util
 
@@ -28,7 +28,7 @@ let test_open_close () =
 
 let test_ping () =
   let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  Ledgerwallet.ping h ;
+  ping h ;
   Hidapi.close h
 
 let test_get_info () =
@@ -43,7 +43,7 @@ let test_get_info () =
 
 let test_get_random () =
   let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  let _random_str = Ledgerwallet.get_random h 200 in
+  let _random_str = get_random h 200 in
   Hidapi.close h
 
 let test_get_wallet_pk () =
@@ -103,6 +103,6 @@ let basic = [
 ]
 
 let () =
-  Alcotest.run "ledgerwallet" [
+  Alcotest.run "ledgerwallet.btc" [
     "basic", basic ;
   ]

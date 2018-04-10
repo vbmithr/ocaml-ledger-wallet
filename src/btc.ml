@@ -5,370 +5,130 @@
 
 open Sexplib.Std
 
-module Status = struct
-  type t =
-    | Invalid_pin of int
-    | Incorrect_length
-    | Incompatible_file_structure
-    | Security_status_unsatisfied
-    | Conditions_of_use_not_satisfied
-    | Incorrect_data
-    | File_not_found
-    | Incorrect_params
-    | Ins_not_supported
-    | Technical_problem of int
-    | Ok [@@deriving sexp]
+type ins =
+  | Setup
+  | Verify_pin
+  | Get_operation_mode
+  | Set_operation_mode
+  | Set_keymap
+  | Set_comm_protocol
+  | Get_wallet_public_key
+  | Get_trusted_input
+  | Hash_input_start
+  | Hash_input_finalize
+  | Hash_sign
+  | Hash_input_finalize_full
+  | Get_internal_chain_index
+  | Sign_message
+  | Get_transaction_limit
+  | Set_transaction_limit
+  | Import_private_key
+  | Get_public_key
+  | Derive_bip32_key
+  | Signverify_immediate
+  | Get_random
+  | Get_attestation
+  | Get_firmware_version
+  | Compose_mofn_address
+  | Dongle_authenticate
+  | Get_pos_seed
 
-  let of_int = function
-    | 0x6700 -> Incorrect_length
-    | 0x6981 -> Incompatible_file_structure
-    | 0x6982 -> Security_status_unsatisfied
-    | 0x6985 -> Conditions_of_use_not_satisfied
-    | 0x6a80 -> Incorrect_data
-    | 0x9404 -> File_not_found
-    | 0x6b00 -> Incorrect_params
-    | 0x6d00 -> Ins_not_supported
-    | 0x9000 -> Ok
-    | v when v >= 0x63c0 && v <= 0x63cf -> Invalid_pin (v land 0x0f)
-    | v when v >= 0x6f00 && v <= 0x6fff -> Technical_problem (v land 0xff)
-    | v -> invalid_arg (Printf.sprintf "Status.of_int: got 0x%x" v)
+let int_of_ins = function
+  | Setup -> 0x20
+  | Verify_pin -> 0x22
+  | Get_operation_mode -> 0x24
+  | Set_operation_mode -> 0x26
+  | Set_keymap -> 0x28
+  | Set_comm_protocol -> 0x2a
+  | Get_wallet_public_key -> 0x40
+  | Get_trusted_input -> 0x42
+  | Hash_input_start -> 0x44
+  | Hash_input_finalize -> 0x46
+  | Hash_sign -> 0x48
+  | Hash_input_finalize_full -> 0x4a
+  | Get_internal_chain_index -> 0x4c
+  | Sign_message -> 0x4e
+  | Get_transaction_limit -> 0xa0
+  | Set_transaction_limit -> 0xa2
+  | Import_private_key -> 0xb0
+  | Get_public_key -> 0xb2
+  | Derive_bip32_key -> 0xb4
+  | Signverify_immediate -> 0xb6
+  | Get_random -> 0xc0
+  | Get_attestation -> 0xc2
+  | Get_firmware_version -> 0xc4
+  | Compose_mofn_address -> 0xc6
+  | Dongle_authenticate -> 0xc8
+  | Get_pos_seed -> 0xca
 
-  let to_string t =
-    Sexplib.Sexp.to_string_hum (sexp_of_t t)
+let ins_of_int = function
+  | 0x20 -> Setup
+  | 0x22 -> Verify_pin
+  | 0x24 -> Get_operation_mode
+  | 0x26 -> Set_operation_mode
+  | 0x28 -> Set_keymap
+  | 0x2a -> Set_comm_protocol
+  | 0x40 -> Get_wallet_public_key
+  | 0x42 -> Get_trusted_input
+  | 0x44 -> Hash_input_start
+  | 0x46 -> Hash_input_finalize
+  | 0x48 -> Hash_sign
+  | 0x4a -> Hash_input_finalize_full
+  | 0x4c -> Get_internal_chain_index
+  | 0x4e -> Sign_message
+  | 0xa0 -> Get_transaction_limit
+  | 0xa2 -> Set_transaction_limit
+  | 0xb0 -> Import_private_key
+  | 0xb2 -> Get_public_key
+  | 0xb4 -> Derive_bip32_key
+  | 0xb6 -> Signverify_immediate
+  | 0xc0 -> Get_random
+  | 0xc2 -> Get_attestation
+  | 0xc4 -> Get_firmware_version
+  | 0xc6 -> Compose_mofn_address
+  | 0xc8 -> Dongle_authenticate
+  | 0xca -> Get_pos_seed
+  | _ -> invalid_arg "Adpu.ins_of_int"
 
-  let show t = to_string t
+type adm_ins =
+  | Init_keys
+  | Init_attestation
+  | Get_update_id
+  | Firmware_update
 
-  let pp ppf t =
-    Format.pp_print_string ppf (to_string t)
-end
+let int_of_adm_ins = function
+  | Init_keys -> 0x20
+  | Init_attestation -> 0x22
+  | Get_update_id -> 0x24
+  | Firmware_update -> 0x42
 
-module Apdu = struct
-  type ins =
-    | Setup
-    | Verify_pin
-    | Get_operation_mode
-    | Set_operation_mode
-    | Set_keymap
-    | Set_comm_protocol
-    | Get_wallet_public_key
-    | Get_trusted_input
-    | Hash_input_start
-    | Hash_input_finalize
-    | Hash_sign
-    | Hash_input_finalize_full
-    | Get_internal_chain_index
-    | Sign_message
-    | Get_transaction_limit
-    | Set_transaction_limit
-    | Import_private_key
-    | Get_public_key
-    | Derive_bip32_key
-    | Signverify_immediate
-    | Get_random
-    | Get_attestation
-    | Get_firmware_version
-    | Compose_mofn_address
-    | Dongle_authenticate
-    | Get_pos_seed
+let adm_ins_of_int = function
+  | 0x20 -> Init_keys
+  | 0x22 -> Init_attestation
+  | 0x24 -> Get_update_id
+  | 0x42 -> Firmware_update
+  | _ -> invalid_arg "Adpu.adm_ins_of_int"
 
-  let int_of_ins = function
-    | Setup -> 0x20
-    | Verify_pin -> 0x22
-    | Get_operation_mode -> 0x24
-    | Set_operation_mode -> 0x26
-    | Set_keymap -> 0x28
-    | Set_comm_protocol -> 0x2a
-    | Get_wallet_public_key -> 0x40
-    | Get_trusted_input -> 0x42
-    | Hash_input_start -> 0x44
-    | Hash_input_finalize -> 0x46
-    | Hash_sign -> 0x48
-    | Hash_input_finalize_full -> 0x4a
-    | Get_internal_chain_index -> 0x4c
-    | Sign_message -> 0x4e
-    | Get_transaction_limit -> 0xa0
-    | Set_transaction_limit -> 0xa2
-    | Import_private_key -> 0xb0
-    | Get_public_key -> 0xb2
-    | Derive_bip32_key -> 0xb4
-    | Signverify_immediate -> 0xb6
-    | Get_random -> 0xc0
-    | Get_attestation -> 0xc2
-    | Get_firmware_version -> 0xc4
-    | Compose_mofn_address -> 0xc6
-    | Dongle_authenticate -> 0xc8
-    | Get_pos_seed -> 0xca
+type cmd =
+  | Adm_cla of adm_ins
+  | Cla of ins
 
-  let ins_of_int = function
-    | 0x20 -> Setup
-    | 0x22 -> Verify_pin
-    | 0x24 -> Get_operation_mode
-    | 0x26 -> Set_operation_mode
-    | 0x28 -> Set_keymap
-    | 0x2a -> Set_comm_protocol
-    | 0x40 -> Get_wallet_public_key
-    | 0x42 -> Get_trusted_input
-    | 0x44 -> Hash_input_start
-    | 0x46 -> Hash_input_finalize
-    | 0x48 -> Hash_sign
-    | 0x4a -> Hash_input_finalize_full
-    | 0x4c -> Get_internal_chain_index
-    | 0x4e -> Sign_message
-    | 0xa0 -> Get_transaction_limit
-    | 0xa2 -> Set_transaction_limit
-    | 0xb0 -> Import_private_key
-    | 0xb2 -> Get_public_key
-    | 0xb4 -> Derive_bip32_key
-    | 0xb6 -> Signverify_immediate
-    | 0xc0 -> Get_random
-    | 0xc2 -> Get_attestation
-    | 0xc4 -> Get_firmware_version
-    | 0xc6 -> Compose_mofn_address
-    | 0xc8 -> Dongle_authenticate
-    | 0xca -> Get_pos_seed
-    | _ -> invalid_arg "Adpu.ins_of_int"
+let cla_of_cmd = function
+  | Adm_cla _ -> 0xd0
+  | Cla _ -> 0xe0
 
-  type adm_ins =
-    | Init_keys
-    | Init_attestation
-    | Get_update_id
-    | Firmware_update
+let ins_of_cmd = function
+  | Adm_cla adm_ins -> int_of_adm_ins adm_ins
+  | Cla ins -> int_of_ins ins
 
-  let int_of_adm_ins = function
-    | Init_keys -> 0x20
-    | Init_attestation -> 0x22
-    | Get_update_id -> 0x24
-    | Firmware_update -> 0x42
-
-  let adm_ins_of_int = function
-    | 0x20 -> Init_keys
-    | 0x22 -> Init_attestation
-    | 0x24 -> Get_update_id
-    | 0x42 -> Firmware_update
-    | _ -> invalid_arg "Adpu.adm_ins_of_int"
-
-  let adm_cla = 0xd0
-  let cla = 0xe0
-
-  type cmd =
-    | Adm_cla of adm_ins
-    | Cla of ins
-
-  type t = {
-    cmd : cmd ;
-    p1 : int ;
-    p2 : int ;
-    lc : int ;
-    le : int ;
-    data : Cstruct.t ;
-  }
-
-  let max_data_length = 230
-
-  let create ?(p1=0) ?(p2=0) ?(lc=0) ?(le=0) ?(data=Cstruct.create 0) cmd =
-    { cmd ; p1 ; p2 ; lc ; le ; data }
-
-  let create_string ?(p1=0) ?(p2=0) ?(lc=0) ?(le=0) ?(data="") cmd =
-    let data = Cstruct.of_string data in
-    { cmd ; p1 ; p2 ; lc ; le ; data }
-
-  let length { data } = 5 + Cstruct.len data
-
-  let write cs { cmd ; p1 ; p2 ; lc ; le ; data } =
-    let len = match lc, le with | 0, _ -> le | _ -> lc in
-    let datalen = Cstruct.len data in
-    begin match cmd with
-      | Adm_cla i ->
-        Cstruct.set_uint8 cs 0 adm_cla ;
-        Cstruct.set_uint8 cs 1 (int_of_adm_ins i)
-      | Cla i ->
-        Cstruct.set_uint8 cs 0 cla ;
-        Cstruct.set_uint8 cs 1 (int_of_ins i)
-    end ;
-    Cstruct.set_uint8 cs 2 p1 ;
-    Cstruct.set_uint8 cs 3 p2 ;
-    Cstruct.set_uint8 cs 4 len ;
-    Cstruct.blit data 0 cs 5 datalen ;
-    Cstruct.shift cs (5 + datalen)
-end
-
-module Transport = struct
-  let packet_length = 64
-  let channel = 0x0101
-  let apdu = 0x05
-  let ping = 0x02
-
-  module Header = struct
-    type t = {
-      cmd : [`Ping | `Apdu] ;
-      seq : int ;
-    }
-
-    let read cs =
-      let open Cstruct in
-      if BE.get_uint16 cs 0 <> channel then
-        invalid_arg "Transport.read_header: invalid channel id" ;
-      let cmd = match get_uint8 cs 2 with
-        | 0x05 -> `Apdu
-        | 0x02 -> `Ping
-        | _ -> invalid_arg "Transport.read_header: invalid command tag"
-      in
-      let seq = BE.get_uint16 cs 3 in
-      { cmd ; seq }, Cstruct.shift cs 5
-
-    let check_exn ?cmd ?seq t =
-      begin match cmd with
-      | None -> ()
-      | Some expected ->
-        if expected <> t.cmd then failwith "Header.check: unexpected command"
-      end ;
-      begin match seq with
-        | None -> ()
-        | Some expected ->
-          if expected <> t.seq then failwith "Header.check: unexpected seq num"
-      end
-
-    let check ?cmd ?seq t =
-      try Result.Ok (check_exn ?cmd ?seq t)
-      with Failure msg -> Result.Error msg
-
-    let length = 5
-  end
-
-  let write_ping ?(buf=Cstruct.create packet_length) h =
-    let open Cstruct in
-    BE.set_uint16 buf 0 channel ;
-    set_uint8 buf 2 ping ;
-    BE.set_uint16 buf 3 0 ;
-    memset (sub buf 5 59) 0 ;
-    match Hidapi.write h (sub buf 0 packet_length) with
-    | Error msg -> failwith msg
-    | Ok nb_written when nb_written <> packet_length -> failwith "Transport.write_ping"
-    | _ -> ()
-
-  let write_apdu
-      ?pp
-      ?(buf=Cstruct.create packet_length)
-      h ({ Apdu.cmd ; p1 ; p2 ; lc ; le ; data } as p) =
-    let apdu_len = Apdu.length p in
-    let apdu_buf = Cstruct.create apdu_len in
-    let _nb_written = Apdu.write apdu_buf p in
-    begin match pp with
-      | None -> ()
-      | Some pp ->
-        Format.fprintf pp "-> %a@." Cstruct.hexdump_pp apdu_buf
-    end ;
-    let apdu_p = ref 0 in (* pos in the apdu buf *)
-    let i = ref 0 in (* packet id *)
-    let open Cstruct in
-
-    (* write first packet *)
-    BE.set_uint16 buf 0 channel ;
-    set_uint8 buf 2 apdu ;
-    BE.set_uint16 buf 3 !i ;
-    BE.set_uint16 buf 5 apdu_len ;
-    let nb_to_write = (min apdu_len (packet_length - 7)) in
-    blit apdu_buf 0 buf 7 nb_to_write ;
-    begin match Hidapi.write h (sub buf 0 packet_length) with
-    | Error msg -> failwith msg
-    | Ok nb_written when nb_written <> packet_length ->
-      failwith "Transport.write_apdu"
-    | _ -> ()
-    end ;
-    apdu_p := !apdu_p + nb_to_write ;
-    incr i ;
-
-    (* write following packets *)
-    while !apdu_p < apdu_len do
-      memset buf 0 ;
-      BE.set_uint16 buf 0 channel ;
-      set_uint8 buf 2 apdu ;
-      BE.set_uint16 buf 3 !i ;
-      let nb_to_write = (min (apdu_len - !apdu_p) (packet_length - 5)) in
-      blit apdu_buf !apdu_p buf 5 nb_to_write ;
-      begin match Hidapi.write h (sub buf 0 packet_length) with
-        | Error err -> failwith err
-        | Ok nb_written when nb_written <> packet_length ->
-          failwith "Transport.write_apdu"
-        | _ -> ()
-      end ;
-      apdu_p := !apdu_p + nb_to_write ;
-      incr i
-    done
-
-  let read ?(buf=Cstruct.create packet_length) h =
-    let expected_seq = ref 0 in
-    let full_payload = ref (Cstruct.create 0) in
-    let payload = ref (Cstruct.create 0) in
-    (* let pos = ref 0 in *)
-    let rec inner () =
-      begin match Hidapi.read ~timeout:600000 h buf packet_length with
-        | Error err -> failwith err
-        | Ok nb_read when nb_read <> packet_length ->
-          failwith (Printf.sprintf "Transport.read: read %d bytes" nb_read)
-        | _ -> ()
-      end ;
-      let hdr, buf = Header.read buf in
-      Header.check_exn ~seq:!expected_seq hdr ;
-      if hdr.seq = 0 then begin (* first frame *)
-        let len = Cstruct.BE.get_uint16 buf 0 in
-        let cs = Cstruct.shift buf 2 in
-        payload := Cstruct.create len ;
-        full_payload := !payload ;
-        let nb_to_read = min len (packet_length - 7) in
-        Cstruct.blit cs 0 !payload 0 nb_to_read ;
-        payload := Cstruct.shift !payload nb_to_read ;
-        (* pos := !pos + nb_to_read ; *)
-        expected_seq := !expected_seq + 1 ;
-      end else begin (* next frames *)
-        (* let rem = Bytes.length !payload - !pos in *)
-        let nb_to_read = min (Cstruct.len !payload) (packet_length - 5) in
-        Cstruct.blit buf 0 !payload 0 nb_to_read ;
-        payload := Cstruct.shift !payload nb_to_read ;
-        (* pos := !pos + nb_to_read ; *)
-        expected_seq := !expected_seq + 1
-      end ;
-      if Cstruct.len !payload = 0 then
-        if hdr.cmd = `Ping then Status.Ok, Cstruct.create 0
-        else
-          (* let sw_pos = Bytes.length !payload - 2 in *)
-          let payload_len = Cstruct.len !full_payload in
-          Status.of_int Cstruct.(BE.get_uint16 !full_payload (payload_len -2)),
-          Cstruct.sub !full_payload 0 (payload_len - 2)
-      else inner ()
-    in
-    inner ()
-
-  let ping ?(msg="") ?buf h =
-    write_ping ?buf h ;
-    match read ?buf h with
-    | Status.Ok, _ -> ()
-    | s, _ -> failwith ((Status.to_string s) ^ " " ^ msg)
-
-  let apdu ?pp ?(msg="") ?buf h apdu =
-    write_apdu ?pp ?buf h apdu ;
-    match read ?buf h with
-    | Status.Ok, payload ->
-      begin match pp with
-        | None -> ()
-        | Some pp ->
-          Format.fprintf pp "<- %a %a@." Status.pp Status.Ok Cstruct.hexdump_pp payload
-      end ;
-      payload
-    | s, payload ->
-      begin match pp with
-        | None -> ()
-        | Some pp ->
-          Format.fprintf pp "<- %a %a@." Status.pp s Cstruct.hexdump_pp payload
-      end ;
-      failwith ((Status.to_string s) ^ " " ^ msg)
-end
+let wrap_ins ins = Apdu.create_cmd ~cmd:(Cla ins) ~cla_of_cmd ~ins_of_cmd
+let wrap_adm_ins ins = Apdu.create_cmd ~cmd:(Adm_cla ins) ~cla_of_cmd ~ins_of_cmd
 
 let ping ?buf h = Transport.ping ?buf h
 
 let get_random ?buf h len =
   let random_str =
-    Transport.apdu ?buf h Apdu.(create ~le:len (Cla Get_random)) in
+    Transport.apdu ?buf h Apdu.(create ~le:len (wrap_ins Get_random)) in
   Cstruct.to_string random_str
 
 module Operation_mode = struct
@@ -388,7 +148,7 @@ module Operation_mode = struct
 
   type t = {
    mode : mode ;
-    seed_not_redeemed : bool ;
+   seed_not_redeemed : bool ;
   } [@@deriving sexp]
 
   let of_int v = {
@@ -411,11 +171,11 @@ module Second_factor = struct
 end
 
 let get_operation_mode ?buf h =
-  let b = Transport.apdu ?buf h Apdu.(create ~le:1 (Cla Get_operation_mode)) in
+  let b = Transport.apdu ?buf h Apdu.(create ~le:1 (wrap_ins Get_operation_mode)) in
   Operation_mode.of_int (Cstruct.get_uint8 b 0)
 
 let get_second_factor ?buf h =
-  let b = Transport.apdu ?buf h Apdu.(create ~p1:1 ~le:1 (Cla Get_operation_mode)) in
+  let b = Transport.apdu ?buf h Apdu.(create ~p1:1 ~le:1 (wrap_ins Get_operation_mode)) in
   Second_factor.of_int (Cstruct.get_uint8 b 0)
 
 module Firmware_version = struct
@@ -461,7 +221,7 @@ end
 
 let get_firmware_version ?buf h =
   let open EndianString.BigEndian in
-  let b = Transport.apdu ?buf h Apdu.(create ~le:7 (Cla Get_firmware_version)) in
+  let b = Transport.apdu ?buf h Apdu.(create ~le:7 (wrap_ins Get_firmware_version)) in
   let open Cstruct in
   let flags = get_uint8 b 0 in
   let arch = get_uint8 b 1 in
@@ -475,17 +235,17 @@ let get_firmware_version ?buf h =
 
 let verify_pin ?buf h pin =
   let lc = String.length pin in
-  let b = Transport.apdu ?buf h Apdu.(create_string ~lc ~data:pin (Cla Verify_pin)) in
+  let b = Transport.apdu ?buf h Apdu.(create_string ~lc ~data:pin (wrap_ins Verify_pin)) in
   match Cstruct.get_uint8 b 0 with
   | 0x01 -> `Need_power_cycle
   | _ -> `Ok
 
 let get_remaining_pin_attempts ?buf h =
-  Transport.write_apdu ?buf h Apdu.(create_string ~p1:0x80 ~lc:1 ~data:"\x00" (Cla Verify_pin)) ;
+  Transport.write_apdu ?buf h Apdu.(create_string ~p1:0x80 ~lc:1 ~data:"\x00" (wrap_ins Verify_pin)) ;
   match Transport.read ?buf h with
-  | Status.Invalid_pin n, _ -> n
-  | Status.Ok, _ -> failwith "get_remaining_pin_attempts got OK"
-  | s, _ -> failwith (Status.to_string s)
+  | Transport.Status.Invalid_pin n, _ -> n
+  | Ok, _ -> failwith "get_remaining_pin_attempts got OK"
+  | s, _ -> failwith (Transport.Status.to_string s)
 
 module Public_key = struct
   type t = {
@@ -524,7 +284,7 @@ let get_wallet_public_key ?pp ?buf h keyPath =
   let data = Cstruct.shift data_init 1 in
   let _data = Bitcoin.Wallet.KeyPath.write_be_cstruct data keyPath in
   let b =
-    Transport.apdu ?pp ?buf h Apdu.(create ~lc ~data:data_init (Cla Get_wallet_public_key)) in
+    Transport.apdu ?pp ?buf h Apdu.(create ~lc ~data:data_init (wrap_ins Get_wallet_public_key)) in
   fst (Public_key.of_cstruct b)
 
 let rec write_payload ?pp ?(finalize_full=false) ?buf ?(msg="write_payload") ~ins ?p1 ?p2 h cs =
@@ -534,7 +294,7 @@ let rec write_payload ?pp ?(finalize_full=false) ?buf ?(msg="write_payload") ~in
     let last = lc = cs_len in
     let p1 = if finalize_full && last then Some 0x80 else p1 in
     let acc = Transport.apdu ?pp ~msg ?buf h
-        Apdu.(create ?p1 ?p2 ~lc ~data:(Cstruct.sub cs 0 lc) (Cla ins)) in
+        Apdu.(create ?p1 ?p2 ~lc ~data:(Cstruct.sub cs 0 lc) (wrap_ins ins)) in
     if last then acc
     else inner acc (Cstruct.shift cs lc) in
   if Cstruct.len cs = 0 then cs else inner (Cstruct.create 0) cs
@@ -543,7 +303,7 @@ let ign_cs cs = ignore (cs : Cstruct.t)
 
 let get_trusted_input ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
   let open Bitcoin in
-  let ins = Apdu.Get_trusted_input in
+  let ins = Get_trusted_input in
   let cs = Cstruct.create 100000 in
   Cstruct.BE.set_uint32 cs 0 (Int32.of_int index) ;
   Cstruct.LE.set_uint32 cs 4 (Int32.of_int tx.version) ;
@@ -703,7 +463,7 @@ let hash_sign ?pp ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Tra
   Cstruct.set_uint8 cs' 5 HashType.(create hash_type hash_flags |> to_int) ;
   assert (cs'.off + 6 = lc) ;
   let signature =
-    Transport.apdu ?pp ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (Cla Hash_sign)) in
+    Transport.apdu ?pp ~msg:"hash_sign" ?buf h Apdu.(create ~lc ~data:cs (wrap_ins Hash_sign)) in
   Cstruct.set_uint8 signature 0 0x30 ;
   signature
 
