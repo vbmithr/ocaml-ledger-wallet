@@ -76,12 +76,6 @@ module Header = struct
       | Some expected ->
         if expected <> t.seq then failwith "Header.check: unexpected seq num"
     end
-
-  let check ?cmd ?seq t =
-    try Result.Ok (check_exn ?cmd ?seq t)
-    with Failure msg -> Result.Error msg
-
-  let length = 5
 end
 
 let write_ping ?(buf=Cstruct.create packet_length) h =
@@ -98,7 +92,7 @@ let write_ping ?(buf=Cstruct.create packet_length) h =
 let write_apdu
     ?pp
     ?(buf=Cstruct.create packet_length)
-    h ({ Apdu.cmd ; p1 ; p2 ; lc ; le ; data } as p) =
+    h p =
   let apdu_len = Apdu.length p in
   let apdu_buf = Cstruct.create apdu_len in
   let _nb_written = Apdu.write apdu_buf p in
@@ -212,9 +206,9 @@ let apdu ?pp ?(msg="") ?buf h apdu =
     end ;
     failwith ((Status.to_string s) ^ " " ^ msg)
 
-let rec write_payload
+let write_payload
     ?pp ?(msg="write_payload") ?buf ?(mark_last=false) ~cmd ?p1 ?p2 h cs =
-  let rec inner acc cs =
+  let rec inner cs =
     let cs_len = Cstruct.len cs in
     let lc = min Apdu.max_data_length cs_len in
     let last = lc = cs_len in
@@ -222,11 +216,11 @@ let rec write_payload
       | true, true, None -> Some 0x80
       | true, true, Some p1 -> Some (0x80 lor p1)
       | _ -> p1 in
-    let acc = apdu ?pp ~msg ?buf h
+    let response = apdu ?pp ~msg ?buf h
         Apdu.(create ?p1 ?p2 ~lc ~data:(Cstruct.sub cs 0 lc) cmd) in
-    if last then acc
-    else inner acc (Cstruct.shift cs lc) in
-  if Cstruct.len cs = 0 then cs else inner (Cstruct.create 0) cs
+    if last then response
+    else inner (Cstruct.shift cs lc) in
+  if Cstruct.len cs = 0 then cs else inner cs
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

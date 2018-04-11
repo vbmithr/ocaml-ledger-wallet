@@ -30,7 +30,7 @@ let create_string ?(p1=0) ?(p2=0) ?(lc=0) ?(le=0) ?(data="") cmd =
   let data = Cstruct.of_string data in
   { cmd ; p1 ; p2 ; lc ; le ; data }
 
-let length { data } = 5 + Cstruct.len data
+let length { data ; _ } = 5 + Cstruct.len data
 
 let write cs { cmd = Apdu_command { cmd ; cla_of_cmd ; ins_of_cmd } ;
                p1 ; p2 ; lc ; le ; data } =
