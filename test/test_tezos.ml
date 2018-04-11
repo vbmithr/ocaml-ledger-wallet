@@ -1,4 +1,4 @@
-open Tezos
+open Ledgerwallet_tezos
 
 let test_open_close () =
   let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in

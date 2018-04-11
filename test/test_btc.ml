@@ -1,4 +1,4 @@
-open Btc
+open Ledgerwallet_btc
 open Bitcoin.Protocol
 open Bitcoin.Util
 

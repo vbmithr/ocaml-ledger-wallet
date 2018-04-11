@@ -9,23 +9,24 @@
   (libraries (result cstruct hidapi))))
 
 (library
- ((name        btc)
+ ((name        ledgerwallet_btc)
   (public_name ledgerwallet-btc)
-  (modules     (Btc))
+  (modules     (Ledgerwallet_btc))
+  (optional)
   (preprocess (pps (ppx_sexp_conv)))
   (synopsis "Ledger wallet library for OCaml: BTC app")
   (libraries (ledgerwallet bitcoin))))
 
 (library
- ((name        ssh_agent)
+ ((name        ledgerwallet_ssh_agent)
   (public_name ledgerwallet-ssh-agent)
-  (modules     (Ssh_agent))
+  (modules     (Ledgerwallet_ssh_agent))
   (synopsis "Ledger wallet library for OCaml: SSH agent app")
   (libraries (ledgerwallet))))
 
 (library
- ((name        tezos)
+ ((name        ledgerwallet_tezos)
   (public_name ledgerwallet-tezos)
-  (modules     (Tezos))
+  (modules     (Ledgerwallet_tezos))
   (synopsis "Ledger wallet library for OCaml: Tezos app")
   (libraries (ledgerwallet))))

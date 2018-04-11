@@ -14,16 +14,16 @@
   (libraries (hex alcotest ledgerwallet-ssh-agent))))
 
 (alias
- ((name    runtest-btc)
+ ((name    runtest-ledgerwallet-btc)
   (deps    (test_btc.exe))
   (action  (run ${<}))))
 
 (alias
- ((name    runtest-ssh-agent)
+ ((name    runtest-ledgerwallet-ssh-agent)
   (deps    (test_ssh_agent.exe))
   (action  (run ${<}))))
 
 (alias
- ((name    runtest)
+ ((name    runtest-ledgerwallet-tezos)
   (deps    (test_tezos.exe))
   (action  (run ${<}))))
