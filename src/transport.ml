@@ -212,6 +212,22 @@ let apdu ?pp ?(msg="") ?buf h apdu =
     end ;
     failwith ((Status.to_string s) ^ " " ^ msg)
 
+let rec write_payload
+    ?pp ?(msg="write_payload") ?buf ?(mark_last=false) ~cmd ?p1 ?p2 h cs =
+  let rec inner acc cs =
+    let cs_len = Cstruct.len cs in
+    let lc = min Apdu.max_data_length cs_len in
+    let last = lc = cs_len in
+    let p1 = match last, mark_last, p1 with
+      | true, true, None -> Some 0x80
+      | true, true, Some p1 -> Some (0x80 lor p1)
+      | _ -> p1 in
+    let acc = apdu ?pp ~msg ?buf h
+        Apdu.(create ?p1 ?p2 ~lc ~data:(Cstruct.sub cs 0 lc) cmd) in
+    if last then acc
+    else inner acc (Cstruct.shift cs lc) in
+  if Cstruct.len cs = 0 then cs else inner (Cstruct.create 0) cs
+
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff
 

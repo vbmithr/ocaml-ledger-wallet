@@ -285,18 +285,6 @@ let get_wallet_public_key ?pp ?buf h keyPath =
     Transport.apdu ?pp ?buf h Apdu.(create ~lc ~data:data_init (wrap_ins Get_wallet_public_key)) in
   fst (Public_key.of_cstruct b)
 
-let rec write_payload ?pp ?(finalize_full=false) ?buf ?(msg="write_payload") ~ins ?p1 ?p2 h cs =
-  let rec inner acc cs =
-    let cs_len = Cstruct.len cs in
-    let lc = min Apdu.max_data_length cs_len in
-    let last = lc = cs_len in
-    let p1 = if finalize_full && last then Some 0x80 else p1 in
-    let acc = Transport.apdu ?pp ~msg ?buf h
-        Apdu.(create ?p1 ?p2 ~lc ~data:(Cstruct.sub cs 0 lc) (wrap_ins ins)) in
-    if last then acc
-    else inner acc (Cstruct.shift cs lc) in
-  if Cstruct.len cs = 0 then cs else inner (Cstruct.create 0) cs
-
 let ign_cs cs = ignore (cs : Cstruct.t)
 
 let get_trusted_input ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
@@ -307,7 +295,8 @@ let get_trusted_input ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
   Cstruct.LE.set_uint32 cs 4 (Int32.of_int tx.version) ;
   let cs' =
     Util.CompactSize.to_cstruct_int (Cstruct.shift cs 8) (List.length tx.inputs) in
-  ign_cs (write_payload ?pp ~ins ?buf ~msg:"init" h (Cstruct.sub cs 0 cs'.off)) ;
+  ign_cs (Transport.write_payload ?pp ~cmd:(wrap_ins ins)
+            ?buf ~msg:"init" h (Cstruct.sub cs 0 cs'.off)) ;
   let p1 = 0x80 in
   ListLabels.iter tx.inputs ~f:begin fun txi ->
     let cs' = Protocol.TxIn.to_cstruct cs txi in
@@ -315,20 +304,25 @@ let get_trusted_input ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
     | len when len > 0 && len < 4 ->
       let cs1 = Cstruct.sub cs 0 (cs'.off - 4) in
       let cs2 = Cstruct.sub cs (cs'.off - 4) 4 in
-      ign_cs (write_payload ?pp ~p1 ~ins h cs1 ~msg:"partial in 1") ;
-      ign_cs (write_payload ?pp ~p1 ~ins h cs2 ~msg:"partial in 2")
+      ign_cs (Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
+                h cs1 ~msg:"partial in 1") ;
+      ign_cs (Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
+                h cs2 ~msg:"partial in 2")
     | _ ->
-      let _ = write_payload ?pp ~p1 ~ins h ~msg:"complete in" (Cstruct.sub cs 0 cs'.off) in
-      ()
+      ign_cs (Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins) h
+                ~msg:"complete in" (Cstruct.sub cs 0 cs'.off))
   end ;
   let cs' = Util.CompactSize.to_cstruct_int cs (List.length tx.outputs) in
-  ign_cs (write_payload ?pp ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"out len") ;
+  ign_cs (Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
+            h (Cstruct.sub cs 0 cs'.off) ~msg:"out len") ;
   ListLabels.iter tx.outputs ~f:begin fun txo ->
     let cs' = Protocol.TxOut.to_cstruct cs txo in
-    ign_cs (write_payload ?pp ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"out")
+    ign_cs (Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
+              h (Cstruct.sub cs 0 cs'.off) ~msg:"out")
   end ;
   let cs' = Protocol.Transaction.LockTime.to_cstruct cs tx.lock_time in
-  write_payload ?pp ~p1 ~ins h (Cstruct.sub cs 0 cs'.off) ~msg:"locktime"
+  Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
+    h (Cstruct.sub cs 0 cs'.off) ~msg:"locktime"
 
 type input_type =
   | Untrusted
@@ -340,6 +334,7 @@ let hash_tx_input_start
   let open Bitcoin in
   let open Bitcoin.Util in
   let open Bitcoin.Protocol in
+  let cmd = wrap_ins Hash_input_start in
   let p2 = match new_transaction, input_type with
     | false, _ -> 0x80
     | true, Segwit _ -> 0x02
@@ -349,7 +344,7 @@ let hash_tx_input_start
   let cs' =
     Bitcoin.Util.CompactSize.to_cstruct_int (Cstruct.shift cs 4) (List.length tx.inputs) in
   let lc = cs'.off in
-  ign_cs (write_payload ?pp ?buf h ~ins:Hash_input_start ~p2 (Cstruct.sub cs 0 lc)) ;
+  ign_cs (Transport.write_payload ?pp ?buf h ~cmd ~p2 (Cstruct.sub cs 0 lc)) ;
   match input_type with
   | Segwit amounts ->
     List.iter2 begin fun { TxIn.prev_out ; script ; seq } amount ->
@@ -366,7 +361,7 @@ let hash_tx_input_start
       in
       Cstruct.LE.set_uint32 cs' 0 seq ;
       let lc = cs'.off + 4 in
-      ign_cs (write_payload ?pp ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc))
+      ign_cs (Transport.write_payload ?pp ?buf h ~cmd ~p1:0x80 (Cstruct.sub cs 0 lc))
     end tx.inputs amounts
   | Trusted inputs ->
     let _ = List.fold_left2 begin fun i { TxIn.prev_out ; script ; seq } input ->
@@ -385,7 +380,7 @@ let hash_tx_input_start
       in
       Cstruct.LE.set_uint32 cs' 0 seq ;
       let lc = cs'.off + 4 in
-      ign_cs (write_payload ?pp ?buf h ~ins:Hash_input_start ~p1:0x80 (Cstruct.sub cs 0 lc)) ;
+      ign_cs (Transport.write_payload ?pp ?buf h ~cmd ~p1:0x80 (Cstruct.sub cs 0 lc)) ;
       succ i
       end 0 tx.inputs inputs in
     ()
@@ -396,8 +391,8 @@ let hash_tx_finalize_full ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) =
   let cs = Cstruct.create 100000 in
   let cs' = Util.CompactSize.to_cstruct_int cs (List.length tx.outputs) in
   let cs' = List.fold_left Protocol.TxOut.to_cstruct cs' tx.outputs in
-  write_payload ?pp ~msg:"hash_tx_finalize_full" ~finalize_full:true
-    ?buf h ~ins:Hash_input_finalize_full (Cstruct.sub cs 0 cs'.off)
+  Transport.write_payload ?pp ~msg:"hash_tx_finalize_full" ~mark_last:true
+    ?buf h ~cmd:(wrap_ins Hash_input_finalize_full) (Cstruct.sub cs 0 cs'.off)
 
 module HashType = struct
   type typ =

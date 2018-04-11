@@ -22,7 +22,8 @@ module Status : sig
   val pp : Format.formatter -> t -> unit
 end
 
-val write_apdu : ?pp:Format.formatter -> ?buf:Cstruct.t ->
+val write_apdu :
+  ?pp:Format.formatter -> ?buf:Cstruct.t ->
   Hidapi.t -> Apdu.t -> unit
 (** [write_apdu ?pp ?buf ledger apdu] writes [apdu] to [ledger]. *)
 
@@ -34,10 +35,19 @@ val ping : ?buf:Cstruct.t -> Hidapi.t -> unit
 (** [ping ?buf ledger] writes a ping packet to [ledger], optionally
     containing [buf]. *)
 
-val apdu : ?pp:Format.formatter -> ?msg:string -> ?buf:Cstruct.t ->
+val apdu :
+  ?pp:Format.formatter -> ?msg:string -> ?buf:Cstruct.t ->
   Hidapi.t -> Apdu.t -> Cstruct.t
 (** [apdu ?pp ?msg ?buf ledger apdu] writes [apdu] to [ledger] and
     returns the response. *)
+
+val write_payload :
+  ?pp:Format.formatter -> ?msg:string -> ?buf:Cstruct.t ->
+  ?mark_last:bool -> cmd:Apdu.cmd -> ?p1:int -> ?p2:int ->
+  Hidapi.t -> Cstruct.t -> Cstruct.t
+(** [write_payload ?pp ?msg ?buf ?mark_last ~cmd ?p1 ?p2 ledger
+    payload] writes the [payload] of [cmd] into [ledger] and returns
+    the response. *)
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff
