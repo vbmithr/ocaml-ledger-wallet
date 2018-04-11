@@ -20,6 +20,12 @@
  ((name        ssh_agent)
   (public_name ledgerwallet-ssh-agent)
   (modules     (Ssh_agent))
-  (preprocess (pps (ppx_sexp_conv)))
   (synopsis "Ledger wallet library for OCaml: SSH agent app")
+  (libraries (ledgerwallet))))
+
+(library
+ ((name        tezos)
+  (public_name ledgerwallet-tezos)
+  (modules     (Tezos))
+  (synopsis "Ledger wallet library for OCaml: Tezos app")
   (libraries (ledgerwallet))))

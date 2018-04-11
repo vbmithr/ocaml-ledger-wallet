@@ -4,6 +4,11 @@
   (libraries (alcotest ledgerwallet-btc))))
 
 (executable
+ ((name test_tezos)
+  (modules (Test_tezos))
+  (libraries (hex alcotest ledgerwallet-tezos tweetnacl))))
+
+(executable
  ((name test_ssh_agent)
   (modules (Test_ssh_agent))
   (libraries (hex alcotest ledgerwallet-ssh-agent))))
@@ -14,6 +19,11 @@
   (action  (run ${<}))))
 
 (alias
- ((name    runtest)
+ ((name    runtest-ssh-agent)
   (deps    (test_ssh_agent.exe))
+  (action  (run ${<}))))
+
+(alias
+ ((name    runtest)
+  (deps    (test_tezos.exe))
   (action  (run ${<}))))
