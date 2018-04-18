@@ -13,6 +13,16 @@ let int_of_ins = function
   | Get_public_key -> 0x02
   | Sign -> 0x04
 
+type curve =
+  | Ed25519
+  | Secp256k1
+  | Secp256r1
+
+let int_of_curve = function
+  | Ed25519 -> 0x00
+  | Secp256k1 -> 0x01
+  | Secp256r1 -> 0x02
+
 let wrap_ins cmd =
   Apdu.create_cmd ~cmd ~cla_of_cmd:(fun _ -> 0x80) ~ins_of_cmd:int_of_ins
 
@@ -22,7 +32,7 @@ let write_path cs path =
     Cstruct.shift cs 4
   end
 
-let get_public_key ?pp ?buf h path =
+let get_public_key ?pp ?buf h curve path =
   let nb_derivations = List.length path in
   if nb_derivations > 10 then invalid_arg "get_public_key: max 10 derivations" ;
   let lc = 1 + 4 * nb_derivations in
@@ -31,13 +41,13 @@ let get_public_key ?pp ?buf h path =
   let data = Cstruct.shift data_init 1 in
   let _data = write_path data path in
   let msg = "Tezos.get_public_key" in
-  let addr =
-    Transport.apdu ~msg ?pp ?buf h
-      Apdu.(create ~lc ~data:data_init (wrap_ins Get_public_key)) in
+  let apdu =  Apdu.create ~p2:(int_of_curve curve)
+      ~lc ~data:data_init (wrap_ins Get_public_key) in
+  let addr = Transport.apdu ~msg ?pp ?buf h apdu in
   let keylen = Cstruct.get_uint8 addr 0 in
   Cstruct.sub addr 1 keylen
 
-let sign ?pp ?buf h path payload =
+let sign ?pp ?buf h curve path payload =
   let nb_derivations = List.length path in
   if nb_derivations > 10 then invalid_arg "get_public_key: max 10 derivations" ;
   let lc = 1 + 4 * nb_derivations in
@@ -47,8 +57,8 @@ let sign ?pp ?buf h path payload =
   let _data = write_path data path in
   let cmd = wrap_ins Sign in
   let msg = "Tezos.sign" in
-  let _addr =
-    Transport.apdu ~msg ?pp ?buf h Apdu.(create ~lc ~data:data_init cmd) in
+  let apdu = Apdu.create ~p2:(int_of_curve curve) ~lc ~data:data_init cmd in
+  let _addr = Transport.apdu ~msg ?pp ?buf h apdu in
   Transport.write_payload ~mark_last:true ?pp ?buf ~msg ~cmd h ~p1:0x01 payload
 
 (*---------------------------------------------------------------------------

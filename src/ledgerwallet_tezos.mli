@@ -3,16 +3,22 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
+type curve =
+  | Ed25519
+  | Secp256k1
+  | Secp256r1
+
 val get_public_key :
-  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> int32 list -> Cstruct.t
-(** [get_public_key ?pp ?buf ledger path] is [0x02 || pk] from
-    [ledger] at [path]. *)
+  ?pp:Format.formatter -> ?buf:Cstruct.t ->
+  Hidapi.t -> curve -> int32 list -> Cstruct.t
+(** [get_public_key ?pp ?buf ledger curve path] is [0x02 || pk] from
+    [ledger] at [path] for curve [curve]. *)
 
 val sign :
   ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> int32 list -> Cstruct.t -> Cstruct.t
-(** [sign ?pp ?buf h path payload] is [signature], signed from
-    [ledger] with key at [path]. *)
+  Hidapi.t -> curve -> int32 list -> Cstruct.t -> Cstruct.t
+(** [sign ?pp ?buf h curve path payload] is [signature], signed from
+    [ledger] with key from curve [curve] at [path]. *)
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

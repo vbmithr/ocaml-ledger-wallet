@@ -6,7 +6,7 @@
 (executable
  ((name test_tezos)
   (modules (Test_tezos))
-  (libraries (hex alcotest ledgerwallet-tezos tweetnacl))))
+  (libraries (hex alcotest ledgerwallet-tezos tweetnacl uecc))))
 
 (executable
  ((name test_ssh_agent)
