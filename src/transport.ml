@@ -84,7 +84,7 @@ let write_ping ?(buf=Cstruct.create packet_length) h =
   set_uint8 buf 2 ping ;
   BE.set_uint16 buf 3 0 ;
   memset (sub buf 5 59) 0 ;
-  match Hidapi.write h (sub buf 0 packet_length) with
+  match Hidapi.write h (to_bigarray (sub buf 0 packet_length)) with
   | Error msg -> failwith msg
   | Ok nb_written when nb_written <> packet_length -> failwith "Transport.write_ping"
   | _ -> ()
@@ -112,7 +112,7 @@ let write_apdu
   BE.set_uint16 buf 5 apdu_len ;
   let nb_to_write = (min apdu_len (packet_length - 7)) in
   blit apdu_buf 0 buf 7 nb_to_write ;
-  begin match Hidapi.write h (sub buf 0 packet_length) with
+  begin match Hidapi.write h (to_bigarray (sub buf 0 packet_length)) with
     | Error msg -> failwith msg
     | Ok nb_written when nb_written <> packet_length ->
       failwith "Transport.write_apdu"
@@ -129,7 +129,7 @@ let write_apdu
     BE.set_uint16 buf 3 !i ;
     let nb_to_write = (min (apdu_len - !apdu_p) (packet_length - 5)) in
     blit apdu_buf !apdu_p buf 5 nb_to_write ;
-    begin match Hidapi.write h (sub buf 0 packet_length) with
+    begin match Hidapi.write h (to_bigarray (sub buf 0 packet_length)) with
       | Error err -> failwith err
       | Ok nb_written when nb_written <> packet_length ->
         failwith "Transport.write_apdu"
@@ -145,7 +145,8 @@ let read ?(buf=Cstruct.create packet_length) h =
   let payload = ref (Cstruct.create 0) in
   (* let pos = ref 0 in *)
   let rec inner () =
-    begin match Hidapi.read ~timeout:600000 h buf packet_length with
+    begin match Hidapi.read ~timeout:600000 h
+                  (Cstruct.to_bigarray buf) packet_length with
       | Error err -> failwith err
       | Ok nb_read when nb_read <> packet_length ->
         failwith (Printf.sprintf "Transport.read: read %d bytes" nb_read)
@@ -176,7 +177,7 @@ let read ?(buf=Cstruct.create packet_length) h =
       else
         (* let sw_pos = Bytes.length !payload - 2 in *)
         let payload_len = Cstruct.len !full_payload in
-        Status.of_int Cstruct.(BE.get_uint16 !full_payload (payload_len -2)),
+        Status.of_int Cstruct.(BE.get_uint16 !full_payload (payload_len - 2)),
         Cstruct.sub !full_payload 0 (payload_len - 2)
     else inner ()
   in
