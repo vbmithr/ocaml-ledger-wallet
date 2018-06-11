@@ -8,8 +8,6 @@ let channel = 0x0101
 let apdu = 0x05
 let ping = 0x02
 
-open Sexplib.Std
-
 module Status = struct
   type t =
     | Invalid_pin of int
@@ -22,7 +20,7 @@ module Status = struct
     | Incorrect_params
     | Ins_not_supported
     | Technical_problem of int
-    | Ok [@@deriving sexp]
+    | Ok
 
   let of_int = function
     | 0x6700 -> Incorrect_length
@@ -38,8 +36,18 @@ module Status = struct
     | v when v >= 0x6f00 && v <= 0x6fff -> Technical_problem (v land 0xff)
     | v -> invalid_arg (Printf.sprintf "Status.of_int: got 0x%x" v)
 
-  let to_string t =
-    Sexplib.Sexp.to_string_hum (sexp_of_t t)
+  let to_string = function
+    | Invalid_pin i -> Printf.sprintf "Invalid pin %d" i
+    | Incorrect_length -> "Incorrect length"
+    | Incompatible_file_structure -> "Incompatible file structure"
+    | Security_status_unsatisfied -> "Security status unsatisfied"
+    | Conditions_of_use_not_satisfied -> "Conditions of use not satisfied"
+    | Incorrect_data -> "Incorrect data"
+    | File_not_found -> "File not found"
+    | Incorrect_params -> "Incorrect params"
+    | Ins_not_supported -> "Instruction not supported"
+    | Technical_problem i -> Printf.sprintf "Technical problem %d" i
+    | Ok -> "Ok"
 
   let show t = to_string t
 

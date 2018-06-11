@@ -4,7 +4,6 @@
  ((name        ledgerwallet)
   (public_name ledgerwallet)
   (modules     (Apdu Transport))
-  (preprocess (pps (ppx_sexp_conv)))
   (synopsis "Ledger wallet library for OCaml: common parts")
   (libraries (result cstruct hidapi))))
 
