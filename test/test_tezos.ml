@@ -1,3 +1,4 @@
+open Monocypher
 open Ledgerwallet_tezos
 
 let vendor_id = 0x2C97
@@ -40,7 +41,7 @@ let test_sign h curve =
   let signature = sign h curve path msg in
   match curve with
   | Ed25519 ->
-      let pk = Tweetnacl.Sign.(pk_of_cstruct_exn (Cstruct.sub pk 1 pkbytes)) in
+      let pk = Monocypher.Sign.(pk_of_cstruct_exn (Cstruct.sub pk 1 pkbytes)) in
       check bool "sign Ed25519" true
         (Tweetnacl.Sign.verify_detached ~key:pk ~signature msg)
   | Secp256k1 -> begin
