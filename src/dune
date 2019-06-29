@@ -31,3 +31,11 @@
  (preprocess (pps ppx_sexp_conv))
  (synopsis "Ledger wallet library for OCaml: Tezos app")
  (libraries ledgerwallet))
+
+(library
+ (name        ledgerwallet_zil)
+ (public_name ledgerwallet-zil)
+ (modules     Ledgerwallet_zil)
+ (preprocess (pps ppx_sexp_conv))
+ (synopsis "Ledger wallet library for OCaml: Zilliqa app")
+ (libraries hex ledgerwallet bech32))
