@@ -250,9 +250,9 @@ let get_remaining_pin_attempts ?buf h =
 
 module Public_key = struct
   type t = {
-    uncompressed : Cstruct.t ;
+    uncompressed : Cstruct_sexp.t ;
     b58addr : string ;
-    bip32_chaincode : Cstruct.t ;
+    bip32_chaincode : Cstruct_sexp.t ;
   } [@@deriving sexp]
 
   let create ~uncompressed ~b58addr ~bip32_chaincode = {
