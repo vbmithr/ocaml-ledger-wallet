@@ -52,6 +52,7 @@ let test_sign h curve =
   get_public_key h curve path >>= fun pk ->
   sign h curve path msg >>| fun signature ->
   match curve with
+  | Bip32_ed25519 -> ()
   | Ed25519 -> ()
      (*let pk = Tweetnacl.Sign.(pk pk) in
       check bool "sign Ed25519" true
