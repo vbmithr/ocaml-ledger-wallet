@@ -27,12 +27,10 @@ let test_getversion () =
 
 let test_getpk ~display_addr () =
   with_connection begin fun h ->
-    match get_pk ~display_addr h 0l with
-    | _, Error msg -> fail msg
-    | pk, Ok addr ->
-      match Bech32.Segwit.encode addr with
-      | Error msg -> fail msg
-      | Ok v -> Format.printf "%a %s" Hex.pp (Hex.of_cstruct pk) v
+    let pk, addr =  get_pk ~display_addr h 0l in
+    match Bech32.Segwit.encode addr with
+    | Error msg -> fail msg
+    | Ok v -> Format.printf "%a %s" Hex.pp (Hex.of_cstruct pk) v
   end
 
 (* let path = [

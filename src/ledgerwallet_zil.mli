@@ -9,7 +9,7 @@ val get_version :
 val get_pk :
   ?display_addr:bool ->
   ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> int32 ->
-  Cstruct.t * ([`Zil] Bech32.Segwit.t, string) result
+  Cstruct.t * [`Zil] Bech32.Segwit.t
 
 (* val get_public_key :
  *   ?pp:Format.formatter -> ?buf:Cstruct.t ->
