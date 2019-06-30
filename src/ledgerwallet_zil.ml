@@ -41,7 +41,7 @@ let get_pk ?(display_addr=false) ?pp ?buf h i =
   let buf = Transport.apdu ~msg ?pp ?buf h apdu in
   let pk = Cstruct.sub buf 0 33 in
   let buf = Cstruct.shift buf 33 in
-  pk, Bech32.Segwit.decode ~version:false (Cstruct.to_string buf)
+  pk, Bech32.Segwit.(decode ~version:false (module Zil) (Cstruct.to_string buf))
 
 (* let get_public_key ?pp ?buf h curve path =
  *   let nb_derivations = List.length path in
