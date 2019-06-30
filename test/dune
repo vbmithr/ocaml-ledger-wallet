@@ -1,7 +1,7 @@
-; (test
-;  (name test_btc)
-;  (modules Test_btc)
-;  (libraries alcotest ledgerwallet-btc))
+(test
+ (name test_btc)
+ (modules Test_btc)
+ (libraries alcotest ledgerwallet-btc))
 
 ; (test
 ;  (name test_tezos)
