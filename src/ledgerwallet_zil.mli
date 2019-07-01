@@ -11,17 +11,15 @@ val get_pk :
   ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> int32 ->
   Cstruct.t * [`Zil] Bech32.Segwit.t
 
-(* val get_public_key :
- *   ?pp:Format.formatter -> ?buf:Cstruct.t ->
- *   Hidapi.t -> int32 list -> Cstruct.t
- * (\** [get_public_key ?pp ?buf ledger curve path] is [0x02 || pk] from
- *     [ledger] at [path] for curve [curve]. *\)
- * 
- * val sign :
- *   ?pp:Format.formatter -> ?buf:Cstruct.t ->
- *   Hidapi.t -> int32 list -> Cstruct.t -> Cstruct.t
- * (\** [sign ?pp ?buf h curve path payload] is [signature], signed from
- *     [ledger] with key from curve [curve] at [path]. *\) *)
+val sign_hash :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t -> Hidapi.t -> int32 -> Cstruct.t -> Cstruct.t
+(** data must be a 32 bytes-len hash. *)
+
+val sign_txn :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t -> Hidapi.t -> int32 -> Cstruct.t -> Cstruct.t
+(** data can be arbitrary len. *)
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2019 Vincent Bernardoff

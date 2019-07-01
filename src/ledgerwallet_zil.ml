@@ -8,23 +8,17 @@ open Ledgerwallet
 type ins =
   | Get_version
   | Get_public_key
-  (* | Sign_hash
-   * | Sign_txn *)
+  | Sign_hash
+  | Sign_txn
 
 let int_of_ins = function
   | Get_version -> 0x01
   | Get_public_key -> 0x02
-  (* | Sign_hash -> 0x04
-   * | Sign_txn -> 0x08 *)
+  | Sign_hash -> 0x04
+  | Sign_txn -> 0x08
 
 let wrap_ins cmd =
   Apdu.create_cmd ~cmd ~cla_of_cmd:(fun _ -> 0xe0) ~ins_of_cmd:int_of_ins
-
-(* let write_path cs path =
- *   ListLabels.fold_left path ~init:cs ~f:begin fun cs i ->
- *     Cstruct.BE.set_uint32 cs 0 i ;
- *     Cstruct.shift cs 4
- *   end *)
 
 let get_version ?pp ?buf h =
   let msg = "Zil.get_version" in
@@ -43,34 +37,23 @@ let get_pk ?(display_addr=false) ?pp ?buf h i =
   let buf = Cstruct.shift buf 33 in
   pk, Bech32.Segwit.(decode_exn (module Zil) (Cstruct.to_string buf))
 
-(* let get_public_key ?pp ?buf h curve path =
- *   let nb_derivations = List.length path in
- *   if nb_derivations > 10 then invalid_arg "get_public_key: max 10 derivations" ;
- *   let lc = 1 + 4 * nb_derivations in
- *   let data_init = Cstruct.create lc in
- *   Cstruct.set_uint8 data_init 0 nb_derivations ;
- *   let data = Cstruct.shift data_init 1 in
- *   let _data = write_path data path in
- *   let msg = "Tezos.get_public_key" in
- *   let apdu =  Apdu.create ~p2:(int_of_curve curve)
- *       ~lc ~data:data_init (wrap_ins Get_public_key) in
- *   let addr = Transport.apdu ~msg ?pp ?buf h apdu in
- *   let keylen = Cstruct.get_uint8 addr 0 in
- *   Cstruct.sub addr 1 keylen *)
+let sign_hash ?pp ?buf h i hash =
+  let msg = "Zil.sign_hash" in
+  let data = Cstruct.create 36 in
+  Cstruct.LE.set_uint32 data 0 i ;
+  Cstruct.blit hash 0 data 4 32 ;
+  let apdu = Apdu.create ~data (wrap_ins Sign_hash) in
+  Transport.apdu ~msg ?pp ?buf h apdu
 
-(* let sign ?pp ?buf h curve path payload =
- *   let nb_derivations = List.length path in
- *   if nb_derivations > 10 then invalid_arg "get_public_key: max 10 derivations" ;
- *   let lc = 1 + 4 * nb_derivations in
- *   let data_init = Cstruct.create lc in
- *   Cstruct.set_uint8 data_init 0 nb_derivations ;
- *   let data = Cstruct.shift data_init 1 in
- *   let _data = write_path data path in
- *   let cmd = wrap_ins Sign in
- *   let msg = "Tezos.sign" in
- *   let apdu = Apdu.create ~p2:(int_of_curve curve) ~lc ~data:data_init cmd in
- *   let _addr = Transport.apdu ~msg ?pp ?buf h apdu in
- *   Transport.write_payload ~mark_last:true ?pp ?buf ~msg ~cmd h ~p1:0x01 payload *)
+let sign_txn ?pp ?buf h i txn =
+  let msg = "Zil.sign_txn" in
+  let txnlen = Cstruct.len txn in
+  let data = Cstruct.create (8 + txnlen) in
+  Cstruct.LE.set_uint32 data 0 i ;
+  Cstruct.LE.set_uint32 data 4 (Int32.of_int txnlen) ;
+  Cstruct.blit txn 0 data 8 txnlen ;
+  let apdu = Apdu.create ~data (wrap_ins Sign_txn) in
+  Transport.apdu ~msg ?pp ?buf h apdu
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2019 Vincent Bernardoff
