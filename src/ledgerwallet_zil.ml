@@ -48,10 +48,11 @@ let sign_hash ?pp ?buf h i hash =
 let sign_txn ?pp ?buf h i txn =
   let msg = "Zil.sign_txn" in
   let txnlen = Cstruct.len txn in
-  let data = Cstruct.create (8 + txnlen) in
+  let data = Cstruct.create (12 + txnlen) in
   Cstruct.LE.set_uint32 data 0 i ;
-  Cstruct.LE.set_uint32 data 4 (Int32.of_int txnlen) ;
-  Cstruct.blit txn 0 data 8 txnlen ;
+  Cstruct.LE.set_uint32 data 4 0l ;
+  Cstruct.LE.set_uint32 data 8 (Int32.of_int txnlen) ;
+  Cstruct.blit txn 0 data 12 txnlen ;
   let apdu = Apdu.create ~data (wrap_ins Sign_txn) in
   Transport.apdu ~msg ?pp ?buf h apdu
 
