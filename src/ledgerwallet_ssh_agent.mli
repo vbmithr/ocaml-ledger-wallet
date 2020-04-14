@@ -9,7 +9,8 @@ type curve =
 
 val get_public_key :
   ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  curve:curve -> path:int32 list -> Hidapi.t -> Cstruct.t
+  curve:curve -> path:int32 list -> Hidapi.t ->
+  (Cstruct.t, Ledgerwallet.Transport.error) result
 (** [get_public_key ?pp ?buf ledger path] returns the (uncompressed)
     public key from [ledger] at BIP32 derivation [path]. *)
 

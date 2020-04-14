@@ -1,13 +1,18 @@
+open Rresult
 open Ledgerwallet_ssh_agent
 
 let test_open_close () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
+  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x1005 in
   Hidapi.close h
 
 let test_ping () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  Ledgerwallet.Transport.ping h ;
-  Hidapi.close h
+  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x1005 in
+  match Ledgerwallet.Transport.ping h with
+  | Result.Ok () -> Hidapi.close h
+  | Result.Error e ->
+     let () = Hidapi.close h in
+     failwith
+       (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
 
 let hard x =
   Int32.logor x 0x8000_0000l
@@ -17,12 +22,18 @@ let path = [
 ]
 
 let test_get_public_key () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  let pk_prime = get_public_key h ~curve:Prime256v1 ~path in
-  let pk_curve = get_public_key h ~curve:Curve25519 ~path in
-  Format.printf "Uncompressed prime256v1 public key %a@." Hex.pp (Hex.of_cstruct pk_prime) ;
-  Format.printf "Uncompressed curve25519 public key %a@." Hex.pp (Hex.of_cstruct pk_curve) ;
-  Hidapi.close h
+  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x1005 in
+  let out =
+    get_public_key h ~curve:Prime256v1 ~path >>= fun pk_prime ->
+    get_public_key h ~curve:Curve25519 ~path >>| fun pk_curve ->
+    Format.printf "Uncompressed prime256v1 public key %a@." Hex.pp (Hex.of_cstruct pk_prime) ;
+    Format.printf "Uncompressed curve25519 public key %a@." Hex.pp (Hex.of_cstruct pk_curve) in
+  Hidapi.close h;
+  match out with
+  | Result.Ok () -> ()
+  | Result.Error e ->
+     failwith
+       (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
 
 let basic = [
   "open_close", `Quick, test_open_close ;
