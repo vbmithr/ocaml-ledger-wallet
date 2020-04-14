@@ -3,6 +3,7 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
+open Rresult
 open Ledgerwallet
 
 type ins =
@@ -23,7 +24,7 @@ let wrap_ins cmd =
 let get_version ?pp ?buf h =
   let msg = "Zil.get_version" in
   let apdu = Apdu.create (wrap_ins Get_version) in
-  let ver = Transport.apdu ~msg ?pp ?buf h apdu in
+  Transport.apdu ~msg ?pp ?buf h apdu >>| fun ver ->
   Cstruct.(get_uint8 ver 0, get_uint8 ver 1, get_uint8 ver 2)
 
 let get_pk ?(display_addr=false) ?pp ?buf h i =
@@ -32,7 +33,7 @@ let get_pk ?(display_addr=false) ?pp ?buf h i =
   Cstruct.LE.set_uint32 data 0 i ;
   let p2 = if display_addr then 1 else 0 in
   let apdu = Apdu.create ~p2 ~data (wrap_ins Get_public_key) in
-  let buf = Transport.apdu ~msg ?pp ?buf h apdu in
+  Transport.apdu ~msg ?pp ?buf h apdu >>| fun buf ->
   let pk = Cstruct.sub buf 0 33 in
   let buf = Cstruct.shift buf 33 in
   pk, Bech32.Segwit.(decode_exn (module Zil) (Cstruct.to_string buf))

@@ -4,21 +4,22 @@
   ---------------------------------------------------------------------------*)
 
 val get_version :
-  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> int * int * int
+  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t ->
+  (int * int * int, Ledgerwallet.Transport.error) result
 
 val get_pk :
   ?display_addr:bool ->
   ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> int32 ->
-  Cstruct.t * [`Zil] Bech32.Segwit.t
+  (Cstruct.t * [`Zil] Bech32.Segwit.t, Ledgerwallet.Transport.error) result
 
 val sign_hash :
-  ?pp:Format.formatter ->
-  ?buf:Cstruct.t -> Hidapi.t -> int32 -> Cstruct.t -> Cstruct.t
+  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> int32 -> Cstruct.t ->
+  (Cstruct.t, Ledgerwallet.Transport.error) result
 (** data must be a 32 bytes-len hash. *)
 
 val sign_txn :
-  ?pp:Format.formatter ->
-  ?buf:Cstruct.t -> Hidapi.t -> int32 -> Cstruct.t -> Cstruct.t
+  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> int32 -> Cstruct.t ->
+  (Cstruct.t, Ledgerwallet.Transport.error) result
 (** data can be arbitrary len. *)
 
 (*---------------------------------------------------------------------------

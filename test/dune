@@ -1,19 +1,19 @@
-(test
+(executable
  (name test_btc)
  (modules Test_btc)
  (libraries alcotest ledgerwallet-btc))
 
-; (test
-;  (name test_tezos)
-;  (modules Test_tezos)
-;  (libraries hex alcotest ledgerwallet-tezos monocypher uecc))
+(executable
+  (name test_tezos)
+  (modules Test_tezos)
+  (libraries hex alcotest ledgerwallet-tezos tweetnacl uecc))
 
-(test
+(executable
  (name test_zil)
  (modules Test_zil)
  (libraries hex alcotest ledgerwallet-zil))
 
-; (test
-;  (name test_ssh_agent)
-;  (modules Test_ssh_agent)
-;  (libraries hex alcotest ledgerwallet-ssh-agent))
+(executable
+  (name test_ssh_agent)
+  (modules Test_ssh_agent)
+  (libraries hex alcotest ledgerwallet-ssh-agent))

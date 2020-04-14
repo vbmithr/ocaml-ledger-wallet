@@ -1,19 +1,23 @@
+open Rresult
 open Ledgerwallet_zil
 open Alcotest
 
 let vendor_id = 0x2C97
-let product_id = 0x0001
+let product_id = 0x1015
 
 let with_connection f =
   let h = Hidapi.open_id_exn ~vendor_id ~product_id in
   try
-    f h ;
-    Hidapi.close h
+    match f h with
+    | Result.Ok () -> Hidapi.close h
+    | Result.Error e ->
+       failwith
+         (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
   with exn ->
     Hidapi.close h ;
     raise exn
 
-let test_open_close () = with_connection (fun _ -> ())
+let test_open_close () = with_connection (fun _ -> R.ok ())
 let test_ping () = with_connection Ledgerwallet.Transport.ping
 
 let hard x =
@@ -21,13 +25,13 @@ let hard x =
 
 let test_getversion () =
   with_connection begin fun h ->
-    let ma, mi, pa = get_version h in
+    get_version h >>| fun (ma, mi, pa) ->
     Printf.printf "%d.%d.%d" ma mi pa
   end
 
 let test_getpk ~display_addr () =
   with_connection begin fun h ->
-    let pk, addr =  get_pk ~display_addr h 0l in
+    get_pk ~display_addr h 0l >>| fun (pk, addr) ->
     match Bech32.Segwit.encode addr with
     | Error msg -> fail msg
     | Ok v -> Format.printf "%a %s" Hex.pp (Hex.of_cstruct pk) v

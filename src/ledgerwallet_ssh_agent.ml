@@ -3,6 +3,7 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
+open Rresult
 open Ledgerwallet
 
 type ins =
@@ -42,11 +43,11 @@ let get_public_key ?pp ?buf ~curve ~path h =
       Cstruct.BE.set_uint32 cs 0 i ;
       Cstruct.shift cs 4
   end in
-  let addr =
-    Transport.apdu ?pp ?buf h
-      Apdu.(create ~lc ~p2 ~data:data_init (wrap_ins Get_public_key)) in
-  let keylen = Cstruct.get_uint8 addr 0 in
-  Cstruct.sub addr 1 keylen
+  Transport.apdu ?pp ?buf h
+    Apdu.(create ~lc ~p2 ~data:data_init (wrap_ins Get_public_key)) >>|
+    fun addr ->
+    let keylen = Cstruct.get_uint8 addr 0 in
+    Cstruct.sub addr 1 keylen
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

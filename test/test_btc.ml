@@ -1,3 +1,4 @@
+open Rresult
 open Ledgerwallet_btc
 open Bitcoin.Protocol
 open Bitcoin.Util
@@ -22,86 +23,91 @@ let nextTx =
     TxOut.create ~value ~script:my_out.script in
   Transaction.create ~inputs:[|input|] ~outputs:[|output|] ()
 
-let test_open_close () =
+let with_connection f =
   let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  Hidapi.close h
+  try
+    match f h with
+    | Result.Ok () -> Hidapi.close h
+    | Result.Error e ->
+       failwith
+         (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
+  with exn ->
+    Hidapi.close h ;
+    raise exn
+
+let test_open_close () = with_connection (fun _ -> R.ok ())
 
 let test_ping () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  Ledgerwallet.Transport.ping h ;
-  Hidapi.close h
+  with_connection Ledgerwallet.Transport.ping
 
 let test_get_info () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  let firmware_version = get_firmware_version h in
-  Printf.printf "Firmware: %s\n"
-    (Sexplib.Sexp.to_string_hum (Firmware_version.sexp_of_t firmware_version)) ;
-  let op_mode = get_operation_mode h in
-  Printf.printf "Operation mode: %s\n"
-    (Sexplib.Sexp.to_string_hum (Operation_mode.sexp_of_t op_mode)) ;
-  Hidapi.close h
+  with_connection begin fun h ->
+    get_firmware_version h >>= fun firmware_version ->
+    Printf.printf "Firmware: %s\n"
+      (Sexplib.Sexp.to_string_hum (Firmware_version.sexp_of_t firmware_version)) ;
+    get_operation_mode h >>| fun op_mode ->
+    Printf.printf "Operation mode: %s\n"
+      (Sexplib.Sexp.to_string_hum (Operation_mode.sexp_of_t op_mode)) ;
+    end
 
 let test_get_random () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  let _random_str = get_random h 200 in
-  Hidapi.close h
+  with_connection (fun h -> get_random h 200 >>| ignore)
 
 let test_get_wallet_pk () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  let pk = get_wallet_public_key h path in
-  let pk_computed = Secp256k1.Key.read_pk_exn ctx pk.uncompressed.buffer in
-  let addr_received = Base58.Bitcoin.of_string_exn c pk.b58addr in
-  let addr_computed = Bitcoin.Wallet.Address.of_pubkey ctx pk_computed in
-  assert (addr_received = addr_computed) ;
-  Format.printf "Uncompressed public key %a@." Hex.pp (Hex.of_cstruct pk.uncompressed) ;
-  Printf.printf "Address %s\n%!" pk.b58addr ;
-  Format.printf "Address computed %a@." (Base58.Bitcoin.pp c) addr_computed ;
-  let addr_computed_testnet =
-    Base58.Bitcoin.create ~version:Testnet_P2PKH ~payload:addr_computed.payload in
-  Format.printf "Address computed %a@." (Base58.Bitcoin.pp c) addr_computed_testnet ;
-  Format.printf "Chaincode %a@." Hex.pp (Hex.of_cstruct pk.bip32_chaincode) ;
-  Hidapi.close h
+  with_connection begin fun h ->
+    get_wallet_public_key h path >>| fun pk ->
+    let pk_computed = Secp256k1.Key.read_pk_exn ctx pk.uncompressed.buffer in
+    let addr_received = Base58.Bitcoin.of_string_exn c pk.b58addr in
+    let addr_computed = Bitcoin.Wallet.Address.of_pubkey ctx pk_computed in
+    assert (addr_received = addr_computed) ;
+    Format.printf "Uncompressed public key %a@." Hex.pp (Hex.of_cstruct pk.uncompressed) ;
+    Printf.printf "Address %s\n%!" pk.b58addr ;
+    Format.printf "Address computed %a@." (Base58.Bitcoin.pp c) addr_computed ;
+    let addr_computed_testnet =
+      Base58.Bitcoin.create ~version:Testnet_P2PKH ~payload:addr_computed.payload in
+    Format.printf "Address computed %a@." (Base58.Bitcoin.pp c) addr_computed_testnet ;
+    Format.printf "Chaincode %a@." Hex.pp (Hex.of_cstruct pk.bip32_chaincode) ;
+    end
 
 let test_get_trusted_input () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  Format.printf "Trusted input %a@."
-    Hex.pp (Hex.of_cstruct (get_trusted_input h prevTx 0)) ;
-  Hidapi.close h
+  with_connection begin fun h ->
+    get_trusted_input h prevTx 0 >>| fun out ->
+    Format.printf "Trusted input %a@." Hex.pp (Hex.of_cstruct out)
+    end
 
 let test_sign_segwit () =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  let pk = get_wallet_public_key h path in
-  let pk_computed = Secp256k1.Key.read_pk_exn ctx pk.uncompressed.buffer in
-  let pk_compressed = Secp256k1.Key.to_bytes ctx pk_computed |> Cstruct.of_bigarray in
-  let bch_signatures =
-    sign_segwit ~bch:true ~path ~prev_amounts:[3000000000L] h nextTx in
-  Printf.printf "Got %d BCH signatures.\n%!" (List.length bch_signatures) ;
-  let bchSig = List.hd bch_signatures in
-  let scriptSig =
-    Bitcoin.Script.[Element.O (Op_pushdata (Cstruct.len bchSig));
-                    D bchSig ;
-                    O (Op_pushdata (Cstruct.len pk_compressed)) ;
-                    D pk_compressed ;
-                   ] in
-  let nextTx_input = nextTx.inputs.(0) in
-  let nextTx_input = { nextTx_input with script = scriptSig @ nextTx_input.script } in
-  let txFinal = { nextTx with inputs = [|nextTx_input|] } in
-  let cs = Cstruct.create 1024 in
-  let cs' = Bitcoin.Protocol.Transaction.to_cstruct cs txFinal in
-  let txSerialized = Cstruct.sub cs 0 cs'.off in
-  Format.printf "Tx = %a@." Hex.pp (Hex.of_cstruct txSerialized) ;
-  Hidapi.close h
+  with_connection begin fun h ->
+    get_wallet_public_key h path >>= fun pk ->
+    let pk_computed = Secp256k1.Key.read_pk_exn ctx pk.uncompressed.buffer in
+    let pk_compressed = Secp256k1.Key.to_bytes ctx pk_computed |> Cstruct.of_bigarray in
+    sign_segwit ~bch:true ~path ~prev_amounts:[3000000000L] h nextTx >>| fun bch_signatures ->
+    Printf.printf "Got %d BCH signatures.\n%!" (List.length bch_signatures) ;
+    let bchSig = List.hd bch_signatures in
+    let scriptSig =
+      Bitcoin.Script.[Element.O (Op_pushdata (Cstruct.len bchSig));
+                      D bchSig ;
+                      O (Op_pushdata (Cstruct.len pk_compressed)) ;
+                      D pk_compressed ;
+      ] in
+    let nextTx_input = nextTx.inputs.(0) in
+    let nextTx_input = { nextTx_input with script = scriptSig @ nextTx_input.script } in
+    let txFinal = { nextTx with inputs = [|nextTx_input|] } in
+    let cs = Cstruct.create 1024 in
+    let cs' = Bitcoin.Protocol.Transaction.to_cstruct cs txFinal in
+    let txSerialized = Cstruct.sub cs 0 cs'.off in
+    Format.printf "Tx = %a@." Hex.pp (Hex.of_cstruct txSerialized)
+    end
 
 let basic = [
-  (* "open_close", `Quick, test_open_close ;
-   * "ping", `Quick, test_ping ; *)
+    "open_close", `Quick, test_open_close ;
+    "ping", `Quick, test_ping ;
 
-  (* "get_info", `Quick, test_get_info ;
-   * "get_random", `Quick, test_get_random ;
-   * "get_wallet_pk", `Quick, test_get_wallet_pk ;
-   * "get_trusted_input", `Quick, test_get_trusted_input ; *)
-  "sign_segwit", `Quick, test_sign_segwit ;
-]
+    "get_info", `Quick, test_get_info ;
+    "get_random", `Quick, test_get_random ;
+    "get_wallet_pk", `Quick, test_get_wallet_pk ;
+    "get_trusted_input", `Quick, test_get_trusted_input ;
+    "sign_segwit", `Quick, test_sign_segwit ;
+  ]
 
 let () =
   Alcotest.run "ledgerwallet.btc" [
