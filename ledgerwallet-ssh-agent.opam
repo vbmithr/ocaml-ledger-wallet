@@ -1,19 +1,15 @@
 opam-version: "2.0"
 name: "ledgerwallet-ssh-agent"
-version: "dev"
 authors: "Vincent Bernardoff <vb@luminar.eu.org>"
 maintainer: "Vincent Bernardoff <vb@luminar.eu.org>"
 license: "ISC"
-synopsis: "Ledger wallet library for OCaml: SSH agent app"
 homepage: "https://github.com/vbmithr/ocaml-ledger-wallet"
 bug-reports: "https://github.com/vbmithr/ocaml-ledger-wallet/issues"
 dev-repo: "git://github.com/vbmithr/ocaml-ledger-wallet"
-
-build: [
-  [ "dune" "build" "-p" name "-j" jobs ]
-  [ "dune" "runtest" "-p" name "-j" jobs ] {with-test}
-]
+build:    [ "dune" "build"   "-p" name "-j" jobs ]
+# run-test: [ "dune" "runtest" "-p" name "-j" jobs ]
 depends: [
-  "dune" {>= "1.7"}
-  "ledgerwallet" {= version}
+  "dune" {>= "2.4.0"}
+  "ledgerwallet"
 ]
+synopsis: "Ledger wallet library for OCaml: SSH agent app"

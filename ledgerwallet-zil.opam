@@ -1,21 +1,20 @@
 opam-version: "2.0"
 name: "ledgerwallet-zil"
-version: "dev"
 authors: "Vincent Bernardoff <vb@luminar.eu.org>"
 maintainer: "Vincent Bernardoff <vb@luminar.eu.org>"
 license: "ISC"
-synopsis: "Ledger wallet library for OCaml: Zilliqa app"
 homepage: "https://github.com/vbmithr/ocaml-ledger-wallet"
 bug-reports: "https://github.com/vbmithr/ocaml-ledger-wallet/issues"
 dev-repo: "git://github.com/vbmithr/ocaml-ledger-wallet"
-
-build: [
-  [ "dune" "build" "-p" name "-j" jobs ]
-  [ "dune" "runtest" "-p" name "-j" jobs ] {with-test}
-]
+build:   [ "dune" "build"   "-p" name "-j" jobs ]
+# run-test:[ "dune" "runtest" "-p" name "-j" jobs ]
 depends: [
-  "dune" {>= "1.7"}
-  "ledgerwallet" {= version}
-  "hex"
+  "dune" {>= "2.4.0"}
+  "hex" {>= "1.4.0"}
   "bech32"
+  "ledgerwallet"
 ]
+pin-depends: [
+  ["bech32.dev" "git+https://github.com/vbmithr/ocaml-bech32.git"]
+]
+synopsis: "Ledger wallet library for OCaml: Zilliqa app"
