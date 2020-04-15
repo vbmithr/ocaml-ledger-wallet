@@ -5,7 +5,7 @@ script:
 - bash -ex .travis-opam.sh
 env:
   global:
-    - PINS="bech32.dev ledgerwallet.dev:."
+    - PINS="ledgerwallet.dev:."
 
   matrix:
     - OCAML_VERSION="4.09" PACKAGE="ledgerwallet"
