@@ -6,7 +6,7 @@
  (libraries rresult cstruct hidapi))
 
 (library
- (name        ledgerwallet_btc)
+ (name ledgerwallet_btc)
  (public_name ledgerwallet-btc)
  (modules     Ledgerwallet_btc)
  (preprocess (pps ppx_sexp_conv))
