@@ -2,7 +2,6 @@
  (name        ledgerwallet)
  (public_name ledgerwallet)
  (modules     Apdu Transport)
- (preprocess (pps ppx_sexp_conv))
  (synopsis "Ledger wallet library for OCaml: common parts")
  (libraries result cstruct hidapi))
 
@@ -19,7 +18,6 @@
  (name        ledgerwallet_ssh_agent)
  (public_name ledgerwallet-ssh-agent)
  (modules     Ledgerwallet_ssh_agent)
- (preprocess (pps ppx_sexp_conv))
  (synopsis "Ledger wallet library for OCaml: SSH agent app")
  (flags -w -37)
  (libraries ledgerwallet))
@@ -28,7 +26,6 @@
  (name        ledgerwallet_tezos)
  (public_name ledgerwallet-tezos)
  (modules     Ledgerwallet_tezos)
- (preprocess (pps ppx_sexp_conv))
  (synopsis "Ledger wallet library for OCaml: Tezos app")
  (libraries ledgerwallet))
 
@@ -36,6 +33,5 @@
  (name        ledgerwallet_zil)
  (public_name ledgerwallet-zil)
  (modules     Ledgerwallet_zil)
- (preprocess (pps ppx_sexp_conv))
  (synopsis "Ledger wallet library for OCaml: Zilliqa app")
  (libraries hex ledgerwallet bech32))
