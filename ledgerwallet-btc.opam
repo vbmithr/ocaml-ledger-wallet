@@ -17,6 +17,8 @@ depends: [
 ]
 pin-depends: [
   ["bitcoin.dev" "git+https://github.com/vbmithr/ocaml-bitcoin.git"]
+  ["murmur3.dev" "git+https://github.com/vbmithr/ocaml-murmur3.git"]
+  ["base58.dev" "git+https://github.com/vbmithr/ocaml-base58.git"]
 ]
 synopsis: "Ledger wallet library for OCaml: Bitcoin app"
 description:"""
