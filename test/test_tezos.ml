@@ -40,7 +40,7 @@ let msg_ba = Cstruct.to_bigarray msg
 let test_getpk h curve =
   get_public_key h curve path >>| fun pk ->
   Alcotest.(check int "pklen"
-              (if curve = Ed25519 then 33 else 65) (Cstruct.len pk))
+              (if curve = Ed25519 then 33 else 65) (Cstruct.length pk))
 
 let test_getpk () =
   with_connection (fun h ->
