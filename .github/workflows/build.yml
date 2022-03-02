@@ -1,0 +1,27 @@
+name: Compile
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - macos-latest
+          - ubuntu-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Use OCaml
+        uses: ocaml/setup-ocaml@v2
+
+      - run: opam install . --deps-only --with-test
+
+      - run: opam exec -- dune build
