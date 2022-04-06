@@ -1,8 +1,8 @@
 name: Compile
 
 on:
-  pull_request:
-  push:
+  - pull_request
+  - push
 
 jobs:
   build:
@@ -21,6 +21,8 @@ jobs:
 
       - name: Use OCaml
         uses: ocaml/setup-ocaml@v2
+        with:
+          ocaml-compiler: 4.12.x
 
       - run: opam install . --deps-only --with-test
 
