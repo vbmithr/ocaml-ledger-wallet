@@ -17,9 +17,6 @@ depends: [
   "ledgerwallet"
   "alcotest" { with-test }
 ]
-pin-depends: [
-  ["bech32.dev" "git+https://github.com/vbmithr/ocaml-bech32.git"]
-]
 synopsis: "Ledger wallet library for OCaml: Zilliqa app"
 description:"""
 """
