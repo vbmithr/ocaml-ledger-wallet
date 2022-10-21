@@ -1,7 +1,7 @@
 (library
  (name ledgerwallet)
  (public_name ledgerwallet)
- (modules Apdu Status Transport)
+ (modules Apdu Status Transport_hidapi Transport)
  (synopsis "Ledger wallet library for OCaml: common parts")
  (libraries rresult cstruct hidapi))
 
