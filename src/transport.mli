@@ -15,11 +15,16 @@ val app_error : msg:string -> ('a, Status.t) result -> ('a, error) result
 
 val pp_error : Format.formatter -> error -> unit
 
-val with_connection :
-  vendor_id:int ->
-  product_id:int ->
-  (t -> (unit, error) result) ->
-  (unit, error) result
+val open_id : vendor_id:int -> product_id:int -> t option
+
+val open_path : string -> t option
+
+val close : t -> unit
+
+val with_connection_id :
+  vendor_id:int -> product_id:int -> (t -> 'a) -> 'a option
+
+val with_connection_path : string -> (t -> 'a) -> 'a option
 
 (** [write_apdu ?pp ?buf ledger apdu] writes [apdu] to [ledger]. *)
 val write_apdu :

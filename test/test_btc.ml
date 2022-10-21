@@ -34,14 +34,15 @@ let nextTx =
   Transaction.create ~inputs:[|input|] ~outputs:[|output|] ()
 
 let fail_on_error = function
-  | Result.Ok () -> ()
-  | Result.Error e ->
+  | None -> Alcotest.fail "Found no ledger."
+  | Some (Result.Ok ()) -> ()
+  | Some (Result.Error e) ->
       Alcotest.fail
         (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
 
 let with_connection f =
   fail_on_error
-    (Ledgerwallet.Transport.with_connection
+    (Ledgerwallet.Transport.with_connection_id
        ~vendor_id:0x2C97
        ~product_id:0x0001
        f)
