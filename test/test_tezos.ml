@@ -6,14 +6,15 @@ let vendor_id = 0x2C97
 let product_id = 0x0001
 
 let fail_on_error = function
-  | Result.Ok () -> ()
-  | Result.Error e ->
+  | None -> Alcotest.fail "Found no ledger."
+  | Some (Result.Ok ()) -> ()
+  | Some (Result.Error e) ->
       Alcotest.fail
         (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
 
 let with_connection f =
   fail_on_error
-    (Ledgerwallet.Transport.with_connection ~vendor_id ~product_id f)
+    (Ledgerwallet.Transport.with_connection_id ~vendor_id ~product_id f)
 
 let test_open_close () = with_connection (fun _ -> R.ok ())
 
@@ -37,9 +38,7 @@ let test_getpk h curve =
     check int "pklen" (if curve = Ed25519 then 33 else 65) (Cstruct.length pk))
 
 let test_getpk () =
-  with_connection (fun h ->
-      List.iter (fun x -> fail_on_error (test_getpk h x)) curves ;
-      R.ok ())
+  List.iter (fun x -> with_connection (fun h -> test_getpk h x)) curves
 
 let secp256k1_ctx =
   Secp256k1.Context.create [Secp256k1.Context.Verify; Secp256k1.Context.Sign]

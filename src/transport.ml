@@ -5,9 +5,11 @@
 
 open Rresult
 
-type t = Hidapi of Hidapi.t
+type t = Hidapi of Hidapi.t | Proxy of Transport_proxy.t
 
-type transport_error = HidapiError of Transport_hidapi.error
+type transport_error =
+  | HidapiError of Transport_hidapi.error
+  | ProxyError of Transport_proxy.error
 
 type error =
   | AppError of {status : Status.t; msg : string}
@@ -19,15 +21,42 @@ let pp_error ppf = function
   | AppError {status; msg} ->
       Format.fprintf ppf "Application level error (%s): %a" msg Status.pp status
   | TransportError (HidapiError e) -> Transport_hidapi.pp_error ppf e
+  | TransportError (ProxyError e) -> Transport_proxy.pp_error ppf e
 
-let with_connection ~vendor_id ~product_id f =
-  let h = Hidapi.open_id_exn ~vendor_id ~product_id in
-  try let out = f (Hidapi h) in
-    Hidapi.close h ;
-    out
-  with exn ->
-    Hidapi.close h ;
-    raise exn
+let create open_ =
+  let name = Sys.getenv_opt "LEDGER_PROXY_ADDRESS" in
+  let port =
+    Option.bind (Sys.getenv_opt "LEDGER_PROXY_PORT") (fun s ->
+        try Some (int_of_string s) with _ -> None)
+  in
+  match (name, port) with
+  | None, None -> Option.map (fun x -> Hidapi x) (open_ ())
+  | _, _ -> Some (Proxy (Transport_proxy.create ?name ?port ()))
+
+let open_id ~vendor_id ~product_id =
+  create (fun () -> Hidapi.open_id ~vendor_id ~product_id)
+
+let open_path path = create (fun () -> Hidapi.open_path path)
+
+let close = function
+  | Hidapi h -> Hidapi.close h
+  | Proxy p -> Transport_proxy.close p
+
+let with_connection f = function
+  | Some h -> (
+      try
+        let out = f h in
+        close h ;
+        Some out
+      with exn ->
+        close h ;
+        raise exn)
+  | None -> None
+
+let with_connection_id ~vendor_id ~product_id f =
+  with_connection f (open_id ~vendor_id ~product_id)
+
+let with_connection_path path f = with_connection f (open_path path)
 
 let write_apdu ?pp ?buf h apdu =
   match h with
@@ -35,6 +64,10 @@ let write_apdu ?pp ?buf h apdu =
       R.reword_error
         (fun e -> TransportError (HidapiError e))
         (Transport_hidapi.write_apdu ?pp ?buf h apdu)
+  | Proxy p ->
+      R.reword_error
+        (fun e -> TransportError (ProxyError e))
+        (Transport_proxy.write_apdu ?pp p apdu)
 
 let read ?pp ?buf h =
   match h with
@@ -42,6 +75,10 @@ let read ?pp ?buf h =
       R.reword_error
         (fun e -> TransportError (HidapiError e))
         (Transport_hidapi.read ?pp ?buf h)
+  | Proxy p ->
+      R.reword_error
+        (fun e -> TransportError (ProxyError e))
+        (Transport_proxy.read p)
 
 let ping ?pp ?buf h =
   match h with
@@ -49,6 +86,7 @@ let ping ?pp ?buf h =
       R.reword_error
         (fun e -> TransportError (HidapiError e))
         (Transport_hidapi.ping ?pp ?buf h)
+  | Proxy _ -> Ok ()
 
 let apdu ?pp ?(msg = "") ?buf h apdu =
   write_apdu ?pp ?buf h apdu >>= fun () ->
