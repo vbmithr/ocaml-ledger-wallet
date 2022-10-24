@@ -23,31 +23,31 @@ let int_of_ins = function
 let wrap_ins cmd =
   Apdu.create_cmd ~cmd ~cla_of_cmd:(fun _ -> 0x80) ~ins_of_cmd:int_of_ins
 
-type curve =
-  | Prime256v1
-  | Curve25519
+type curve = Prime256v1 | Curve25519
 
-let int_of_curve = function
-  | Prime256v1 -> 0x01
-  | Curve25519 -> 0x02
+let int_of_curve = function Prime256v1 -> 0x01 | Curve25519 -> 0x02
 
 let get_public_key ?pp ?buf ~curve ~path h =
   let nb_derivations = List.length path in
   if nb_derivations > 10 then invalid_arg "get_public_key: max 10 derivations" ;
-  let lc = 1 + 4 * nb_derivations in
+  let lc = 1 + (4 * nb_derivations) in
   let p2 = int_of_curve curve in
   let data_init = Cstruct.create lc in
   Cstruct.set_uint8 data_init 0 nb_derivations ;
   let data = Cstruct.shift data_init 1 in
-  let _data = ListLabels.fold_left path ~init:data ~f:begin fun cs i ->
-      Cstruct.BE.set_uint32 cs 0 i ;
-      Cstruct.shift cs 4
-  end in
-  Transport.apdu ?pp ?buf h
-    Apdu.(create ~lc ~p2 ~data:data_init (wrap_ins Get_public_key)) >>|
-    fun addr ->
-    let keylen = Cstruct.get_uint8 addr 0 in
-    Cstruct.sub addr 1 keylen
+  let _data =
+    ListLabels.fold_left path ~init:data ~f:(fun cs i ->
+        Cstruct.BE.set_uint32 cs 0 i ;
+        Cstruct.shift cs 4)
+  in
+  Transport.apdu
+    ?pp
+    ?buf
+    h
+    Apdu.(create ~lc ~p2 ~data:data_init (wrap_ins Get_public_key))
+  >>| fun addr ->
+  let keylen = Cstruct.get_uint8 addr 0 in
+  Cstruct.sub addr 1 keylen
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

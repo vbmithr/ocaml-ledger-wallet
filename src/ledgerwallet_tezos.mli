@@ -7,149 +7,180 @@ open Ledgerwallet
 
 module Version : sig
   type app_class = Tezos | TezBake
+
   val pp_app_class : Format.formatter -> app_class -> unit
 
-  type Transport.Status.t +=
-      Tezos_impossible_to_read_version
+  type Transport.Status.t += Tezos_impossible_to_read_version
 
-  type t = {
-    app_class : app_class ;
-    major : int ;
-    minor : int ;
-    patch : int ;
-  }
+  type t = {app_class : app_class; major : int; minor : int; patch : int}
+
   val pp : Format.formatter -> t -> unit
 end
 
-type curve =
-  | Ed25519
-  | Secp256k1
-  | Secp256r1
-  | Bip32_ed25519
+type curve = Ed25519 | Secp256k1 | Secp256r1 | Bip32_ed25519
 
 val curve_of_string : string -> curve option
+
 val pp_curve : Format.formatter -> curve -> unit
+
 val pp_curve_short : Format.formatter -> curve -> unit
 
-val get_version :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> (Version.t, Transport.error) result
 (** [get_version ?pp ?buf ledger] is the version information of the
     Ledger app running at [ledger]. *)
+val get_version :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  (Version.t, Transport.error) result
 
-val get_git_commit :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> (string, Transport.error) result
 (** [get_git_commit ?pp ?buf ledger] is the git commit information of
     the Ledger app running at [ledger]. *)
+val get_git_commit :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  (string, Transport.error) result
 
-val get_authorized_key :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> (int32 list, Transport.error) result
 (** [get_authorized_key ?pp ?buf ledger] is the BIP32 path of the key
     authorized to bake on the Ledger app running at [ledger]. *)
+val get_authorized_key :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  (int32 list, Transport.error) result
 
-val get_authorized_path_and_curve :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> (int32 list * curve, Transport.error) result
 (** [get_authorized_path_and_curve ?pp ?buf ledger] is the BIP32 path
     and the curve code of the key authorized to bake on the Ledger app
     running at [ledger]. *)
-
-
-val get_public_key :
-  ?prompt:bool ->
+val get_authorized_path_and_curve :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t -> curve -> int32 list -> (Cstruct.t, Transport.error) result
+  Hidapi.t ->
+  (int32 list * curve, Transport.error) result
+
 (** [get_public_key ?pp ?buf ?prompt ledger curve path] is [0x02 ||
     pk] from [ledger] at [path] for curve [curve]. If [prompt] is
     [true] (the default), then a prompt on Ledger screen will ask user
     confirmation. *)
-
-val authorize_baking :
+val get_public_key :
+  ?prompt:bool ->
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t -> curve -> int32 list -> (Cstruct.t, Transport.error) result
+  Hidapi.t ->
+  curve ->
+  int32 list ->
+  (Cstruct.t, Transport.error) result
+
 (** [authorize_baking ?pp ?buf ?prompt ledger curve path] is like
     [get_public_key] with [prompt = true], but only works with the
     baking Ledger application and serves to indicate that the key from
     [curve] at [path] is allowed to bake.
 
     This is deprecated as it ignores test-chains, see {!setup_baking}. *)
+val authorize_baking :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  curve ->
+  int32 list ->
+  (Cstruct.t, Transport.error) result
 
-val setup_baking :
-  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t ->
-  main_chain_id: string -> main_hwm:int32 -> test_hwm:int32 ->
-  curve -> int32 list -> (Cstruct.t, Transport.error) result
 (** [setup_baking ?pp ?buf ?prompt ledger ~main_chain_id ~main_hwm ~test_hwm curve path]
     sets up the Ledger's Baking application: it informs
     the device of the ID of the main chain (should be of length [4]),
     sets the high watermarks for the main and test chains, {i and}
     indicates that the key at the given [curve/path] is authorized for
     baking. *)
+val setup_baking :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  main_chain_id:string ->
+  main_hwm:int32 ->
+  test_hwm:int32 ->
+  curve ->
+  int32 list ->
+  (Cstruct.t, Transport.error) result
 
-val deauthorize_baking :
-  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> (unit, Transport.error) result
 (** [deauthorize_baking ?pp ?buf ledger]
     deauthorizes the Ledger's Baking application from baking for any address. *)
+val deauthorize_baking :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  (unit, Transport.error) result
 
-val get_high_watermark :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> ((int32 * int32 option), Transport.error) result
 (** [get_high_watermark ?pp ?buf ledger] is the current value of the
     high water mark for the main-chain on [ledger]. This works with
     the baking app only. See {!get_all_high_watermarks} for a more
     complete query. *)
+val get_high_watermark :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  (int32 * int32 option, Transport.error) result
 
+(** Query the high water marks for the main and test chains, as well as the ID
+    of the main-chain (string of length 4) recorded by the Ledger Baking app. *)
 val get_all_high_watermarks :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Hidapi.t ->
-  ([ `Main_hwm of (int32 * int32 option) ] *
-   [ `Test_hwm of (int32 * int32 option) ] *
-   [ `Chain_id of string ],
-   Transport.error) result
-(** Query the high water marks for the main and test chains, as well as the ID
-    of the main-chain (string of length 4) recorded by the Ledger Baking app. *)
+  ( [`Main_hwm of int32 * int32 option]
+    * [`Test_hwm of int32 * int32 option]
+    * [`Chain_id of string],
+    Transport.error )
+  result
 
-val set_high_watermark :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> int32 -> (unit, Transport.error) result
 (** [set_high_watermark ?pp ?buf ledger hwm] reset the high water
     mark on [ledger] to [hwm] for the main-chain.
     This works with the baking app only. Use {!setup_baking} to be able to also
     reset all the test-chain water mark. *)
+val set_high_watermark :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  int32 ->
+  (unit, Transport.error) result
 
+(** [sign ?pp ?buf ?hash_on_ledger h curve path payload] is the
+    signature of [payload] (or its hash if [hash_on_ledger] is [true],
+    the default), signed on [ledger] with key from curve [curve] at
+    [path]. *)
 val sign :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   ?hash_on_ledger:bool ->
-  Hidapi.t -> curve -> int32 list ->
-  Cstruct.t -> (Cstruct.t, Transport.error) result
-(** [sign ?pp ?buf ?hash_on_ledger h curve path payload] is the
-    signature of [payload] (or its hash if [hash_on_ledger] is [true],
-    the default), signed on [ledger] with key from curve [curve] at
-    [path]. *)
+  Hidapi.t ->
+  curve ->
+  int32 list ->
+  Cstruct.t ->
+  (Cstruct.t, Transport.error) result
 
-val get_deterministic_nonce :
-  ?pp:Format.formatter ->
-  ?buf:Cstruct.t ->
-  Hidapi.t -> curve -> int32 list ->
-  Cstruct.t -> (Cstruct.t, Transport.error) result
 (** [get_deterministic_nonce ?pp ?buf h curve path payload] asks the ledger
     for a deterministic nonce from a some given bytes (using HMAC).
 *)
-
-val sign_and_hash :
+val get_deterministic_nonce :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t -> curve -> int32 list ->
-  Cstruct.t -> (Cstruct.t * Cstruct.t, Transport.error) result
+  Hidapi.t ->
+  curve ->
+  int32 list ->
+  Cstruct.t ->
+  (Cstruct.t, Transport.error) result
+
 (** [sign ?pp ?buf ?hash_on_ledger h curve path payload] is the
     signature of [payload] (or its hash if [hash_on_ledger] is [true],
     the default), signed on [ledger] with key from curve [curve] at
     [path]. *)
+val sign_and_hash :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  curve ->
+  int32 list ->
+  Cstruct.t ->
+  (Cstruct.t * Cstruct.t, Transport.error) result
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

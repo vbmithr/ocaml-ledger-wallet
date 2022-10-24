@@ -3,6 +3,7 @@ open Ledgerwallet_zil
 open Alcotest
 
 let vendor_id = 0x2C97
+
 let product_id = 0x1015
 
 let with_connection f =
@@ -11,31 +12,28 @@ let with_connection f =
     match f h with
     | Result.Ok () -> Hidapi.close h
     | Result.Error e ->
-       failwith
-         (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
+        failwith
+          (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
   with exn ->
     Hidapi.close h ;
     raise exn
 
 let test_open_close () = with_connection (fun _ -> R.ok ())
+
 let test_ping () = with_connection Ledgerwallet.Transport.ping
 
-let hard x =
-  Int32.logor x 0x8000_0000l
+let hard x = Int32.logor x 0x8000_0000l
 
 let test_getversion () =
-  with_connection begin fun h ->
-    get_version h >>| fun (ma, mi, pa) ->
-    Printf.printf "%d.%d.%d" ma mi pa
-  end
+  with_connection (fun h ->
+      get_version h >>| fun (ma, mi, pa) -> Printf.printf "%d.%d.%d" ma mi pa)
 
 let test_getpk ~display_addr () =
-  with_connection begin fun h ->
-    get_pk ~display_addr h 0l >>| fun (pk, addr) ->
-    match Bech32.Segwit.encode addr with
-    | Error msg -> fail msg
-    | Ok v -> Format.printf "%a %s" Hex.pp (Hex.of_cstruct pk) v
-  end
+  with_connection (fun h ->
+      get_pk ~display_addr h 0l >>| fun (pk, addr) ->
+      match Bech32.Segwit.encode addr with
+      | Error msg -> fail msg
+      | Ok v -> Format.printf "%a %s" Hex.pp (Hex.of_cstruct pk) v)
 
 (* let path = [
  *   hard 44l ; hard 1729l
@@ -86,17 +84,15 @@ let test_getpk ~display_addr () =
  *   (\* List.iter (test_sign h) [Secp256k1] ; *\)
  *   Hidapi.close h *)
 
-let basic = [
-  (* "open_close", `Quick, test_open_close ;
-   * "ping", `Quick, test_ping ; *)
-  "version", `Quick, test_getversion ;
-  (* "getpk", `Quick, (test_getpk ~display_addr:false) ; *)
-  "getaddr", `Quick, (test_getpk ~display_addr:true) ;
-  (* "get_public_key", `Quick, test_getpk ;
-   * "sign", `Quick, test_sign ; *)
-]
-
-let () =
-  Alcotest.run "ledgerwallet.zil" [
-    "basic", basic ;
+let basic =
+  [
+    (* "open_close", `Quick, test_open_close ;
+     * "ping", `Quick, test_ping ; *)
+    ("version", `Quick, test_getversion);
+    (* "getpk", `Quick, (test_getpk ~display_addr:false) ; *)
+    ("getaddr", `Quick, test_getpk ~display_addr:true)
+    (* "get_public_key", `Quick, test_getpk ;
+     * "sign", `Quick, test_sign ; *);
   ]
+
+let () = Alcotest.run "ledgerwallet.zil" [("basic", basic)]

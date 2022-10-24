@@ -6,11 +6,7 @@
 open Rresult
 open Ledgerwallet
 
-type ins =
-  | Get_version
-  | Get_public_key
-  | Sign_hash
-  | Sign_txn
+type ins = Get_version | Get_public_key | Sign_hash | Sign_txn
 
 let int_of_ins = function
   | Get_version -> 0x01
@@ -27,7 +23,7 @@ let get_version ?pp ?buf h =
   Transport.apdu ~msg ?pp ?buf h apdu >>| fun ver ->
   Cstruct.(get_uint8 ver 0, get_uint8 ver 1, get_uint8 ver 2)
 
-let get_pk ?(display_addr=false) ?pp ?buf h i =
+let get_pk ?(display_addr = false) ?pp ?buf h i =
   let msg = "Zil.get_pk" in
   let data = Cstruct.create 4 in
   Cstruct.LE.set_uint32 data 0 i ;
@@ -36,7 +32,7 @@ let get_pk ?(display_addr=false) ?pp ?buf h i =
   Transport.apdu ~msg ?pp ?buf h apdu >>| fun buf ->
   let pk = Cstruct.sub buf 0 33 in
   let buf = Cstruct.shift buf 33 in
-  pk, Bech32.Segwit.(decode_exn (module Zil) (Cstruct.to_string buf))
+  (pk, Bech32.Segwit.(decode_exn (module Zil) (Cstruct.to_string buf)))
 
 let sign_hash ?pp ?buf h i hash =
   let msg = "Zil.sign_hash" in

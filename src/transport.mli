@@ -5,6 +5,7 @@
 
 module Status : sig
   type t = ..
+
   type t +=
     | Invalid_pin of int
     | Incorrect_length
@@ -26,12 +27,15 @@ module Status : sig
     | Unknown of int
 
   val register_string_f : (t -> string option) -> unit
+
   val to_string : t -> string
 
   val register_help_suggestor_f : (t -> string option) -> unit
+
   val to_help_suggestion : t -> string option
 
   val show : t -> string
+
   val pp : Format.formatter -> t -> unit
 end
 
@@ -41,8 +45,7 @@ module Header : sig
       | Header_too_short of int
       | Invalid_channel of int
       | Invalid_command_tag of int
-      | Unexpected_sequence_number of { expected : int ;
-                                        actual : int }
+      | Unexpected_sequence_number of {expected : int; actual : int}
   end
 end
 
@@ -52,44 +55,59 @@ type transport_error =
   | Incomplete_read of int
 
 type error =
-  | AppError of { status : Status.t ; msg : string }
+  | AppError of {status : Status.t; msg : string}
   | ApduError of Header.Error.t
   | TransportError of transport_error
 
-val app_error :
-  msg:string -> ('a, Status.t) result -> ('a, error) result
+val app_error : msg:string -> ('a, Status.t) result -> ('a, error) result
 
 val pp_error : Format.formatter -> error -> unit
 
-val write_apdu :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> Apdu.t -> (unit, error) result
 (** [write_apdu ?pp ?buf ledger apdu] writes [apdu] to [ledger]. *)
+val write_apdu :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  Apdu.t ->
+  (unit, error) result
 
-val read :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> (Status.t * Cstruct.t, error) result
 (** [read ?pp ?buf ledger] reads from [ledger] a status response and a
     payload. *)
+val read :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  (Status.t * Cstruct.t, error) result
 
-val ping : ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  Hidapi.t -> (unit, error) result
 (** [ping ?pp ?buf ledger] writes a ping packet to [ledger],
     optionally containing [buf]. *)
+val ping :
+  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> (unit, error) result
 
-val apdu :
-  ?pp:Format.formatter -> ?msg:string -> ?buf:Cstruct.t ->
-  Hidapi.t -> Apdu.t -> (Cstruct.t, error) result
 (** [apdu ?pp ?msg ?buf ledger apdu] writes [apdu] to [ledger] and
     returns the response. *)
+val apdu :
+  ?pp:Format.formatter ->
+  ?msg:string ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  Apdu.t ->
+  (Cstruct.t, error) result
 
-val write_payload :
-  ?pp:Format.formatter -> ?msg:string -> ?buf:Cstruct.t ->
-  ?mark_last:bool -> cmd:Apdu.cmd -> ?p1:int -> ?p2:int ->
-  Hidapi.t -> Cstruct.t -> (Cstruct.t, error) result
 (** [write_payload ?pp ?msg ?buf ?mark_last ~cmd ?p1 ?p2 ledger
     payload] writes the [payload] of [cmd] into [ledger] and returns
     the response. *)
+val write_payload :
+  ?pp:Format.formatter ->
+  ?msg:string ->
+  ?buf:Cstruct.t ->
+  ?mark_last:bool ->
+  cmd:Apdu.cmd ->
+  ?p1:int ->
+  ?p2:int ->
+  Hidapi.t ->
+  Cstruct.t ->
+  (Cstruct.t, error) result
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff
