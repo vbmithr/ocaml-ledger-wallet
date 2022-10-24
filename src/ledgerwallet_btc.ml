@@ -92,11 +92,7 @@ let ins_of_int = function
   | 0xca -> Get_pos_seed
   | _ -> invalid_arg "Adpu.ins_of_int"
 
-type adm_ins =
-  | Init_keys
-  | Init_attestation
-  | Get_update_id
-  | Firmware_update
+type adm_ins = Init_keys | Init_attestation | Get_update_id | Firmware_update
 
 let int_of_adm_ins = function
   | Init_keys -> 0x20
@@ -111,32 +107,25 @@ let adm_ins_of_int = function
   | 0x42 -> Firmware_update
   | _ -> invalid_arg "Adpu.adm_ins_of_int"
 
-type cmd =
-  | Adm_cla of adm_ins
-  | Cla of ins
+type cmd = Adm_cla of adm_ins | Cla of ins
 
-let cla_of_cmd = function
-  | Adm_cla _ -> 0xd0
-  | Cla _ -> 0xe0
+let cla_of_cmd = function Adm_cla _ -> 0xd0 | Cla _ -> 0xe0
 
 let ins_of_cmd = function
   | Adm_cla adm_ins -> int_of_adm_ins adm_ins
   | Cla ins -> int_of_ins ins
 
 let wrap_ins ins = Apdu.create_cmd ~cmd:(Cla ins) ~cla_of_cmd ~ins_of_cmd
-let wrap_adm_ins ins = Apdu.create_cmd ~cmd:(Adm_cla ins) ~cla_of_cmd ~ins_of_cmd
+
+let wrap_adm_ins ins =
+  Apdu.create_cmd ~cmd:(Adm_cla ins) ~cla_of_cmd ~ins_of_cmd
 
 let get_random ?buf h len =
-  Transport.apdu ?buf h Apdu.(create ~le:len (wrap_ins Get_random)) >>|
-  Cstruct.to_string
+  Transport.apdu ?buf h Apdu.(create ~le:len (wrap_ins Get_random))
+  >>| Cstruct.to_string
 
 module Operation_mode = struct
-  type mode =
-    | Standard
-    | Relaxed
-    | Server
-    | Developer
-  [@@deriving sexp]
+  type mode = Standard | Relaxed | Server | Developer [@@deriving sexp]
 
   let mode_of_int = function
     | 0 -> Standard
@@ -145,22 +134,14 @@ module Operation_mode = struct
     | 8 -> Developer
     | _ -> invalid_arg "Operation_mode.mode_of_int"
 
-  type t = {
-   mode : mode ;
-   seed_not_redeemed : bool ;
-  } [@@deriving sexp]
+  type t = {mode : mode; seed_not_redeemed : bool} [@@deriving sexp]
 
-  let of_int v = {
-    mode = mode_of_int (v land 7) ;
-    seed_not_redeemed = (v land 8 <> 0) ;
-  }
+  let of_int v =
+    {mode = mode_of_int (v land 7); seed_not_redeemed = v land 8 <> 0}
 end
 
 module Second_factor = struct
-  type t =
-    | Keyboard
-    | Card
-    | Card_screen [@@deriving sexp]
+  type t = Keyboard | Card | Card_screen [@@deriving sexp]
 
   let of_int = function
     | 0x11 -> Keyboard
@@ -170,14 +151,12 @@ module Second_factor = struct
 end
 
 let get_operation_mode ?buf h =
-  Transport.apdu
-    ?buf h Apdu.(create ~le:1 (wrap_ins Get_operation_mode)) >>| fun b ->
-  Operation_mode.of_int (Cstruct.get_uint8 b 0)
+  Transport.apdu ?buf h Apdu.(create ~le:1 (wrap_ins Get_operation_mode))
+  >>| fun b -> Operation_mode.of_int (Cstruct.get_uint8 b 0)
 
 let get_second_factor ?buf h =
-  Transport.apdu
-    ?buf h Apdu.(create ~p1:1 ~le:1 (wrap_ins Get_operation_mode)) >>| fun b ->
-  Second_factor.of_int (Cstruct.get_uint8 b 0)
+  Transport.apdu ?buf h Apdu.(create ~p1:1 ~le:1 (wrap_ins Get_operation_mode))
+  >>| fun b -> Second_factor.of_int (Cstruct.get_uint8 b 0)
 
 module Firmware_version = struct
   type flag =
@@ -199,31 +178,33 @@ module Firmware_version = struct
     | _ -> invalid_arg "Firmware_version.flag_of_bit"
 
   let flags_of_int i =
-    List.fold_left begin fun a e ->
-      if i land e <> 0 then
-        flag_of_bit e :: a else a
-    end [] [0x01; 0x02; 0x04; 0x08; 0x10; 0x20]
+    List.fold_left
+      (fun a e -> if i land e <> 0 then flag_of_bit e :: a else a)
+      []
+      [0x01; 0x02; 0x04; 0x08; 0x10; 0x20]
 
   type t = {
-    flags : flag list ;
-    arch : int ;
-    major : int ;
-    minor : int ;
-    patch : int ;
-    loader_major : int ;
-    loader_minor : int ;
-    loader_patch : int ;
-  } [@@deriving sexp]
+    flags : flag list;
+    arch : int;
+    major : int;
+    minor : int;
+    patch : int;
+    loader_major : int;
+    loader_minor : int;
+    loader_patch : int;
+  }
+  [@@deriving sexp]
 
-  let create ~flags ~arch ~major ~minor ~patch ~loader_major ~loader_minor ~loader_patch =
+  let create ~flags ~arch ~major ~minor ~patch ~loader_major ~loader_minor
+      ~loader_patch =
     let flags = flags_of_int flags in
-    { flags ; arch ; major ; minor ; patch ; loader_major ; loader_minor ; loader_patch }
+    {flags; arch; major; minor; patch; loader_major; loader_minor; loader_patch}
 end
 
 let get_firmware_version ?buf h =
   let open EndianString.BigEndian in
-  Transport.apdu
-    ?buf h Apdu.(create ~le:7 (wrap_ins Get_firmware_version)) >>| fun b ->
+  Transport.apdu ?buf h Apdu.(create ~le:7 (wrap_ins Get_firmware_version))
+  >>| fun b ->
   let open Cstruct in
   let flags = get_uint8 b 0 in
   let arch = get_uint8 b 1 in
@@ -234,21 +215,27 @@ let get_firmware_version ?buf h =
   let loader_minor = get_uint8 b 6 lsr 4 in
   let loader_patch = get_uint8 b 6 land 0x0f in
   Firmware_version.create
-    ~flags ~arch ~major ~minor ~patch
-    ~loader_major ~loader_minor ~loader_patch
+    ~flags
+    ~arch
+    ~major
+    ~minor
+    ~patch
+    ~loader_major
+    ~loader_minor
+    ~loader_patch
 
 let verify_pin ?buf h pin =
   let lc = String.length pin in
-  Transport.apdu
-    ?buf h Apdu.(create_string ~lc ~data:pin (wrap_ins Verify_pin)) >>| fun b ->
-  match Cstruct.get_uint8 b 0 with
-  | 0x01 -> `Need_power_cycle
-  | _ -> `Ok
+  Transport.apdu ?buf h Apdu.(create_string ~lc ~data:pin (wrap_ins Verify_pin))
+  >>| fun b ->
+  match Cstruct.get_uint8 b 0 with 0x01 -> `Need_power_cycle | _ -> `Ok
 
 let get_remaining_pin_attempts ?buf h =
   Transport.write_apdu
-    ?buf h
-    Apdu.(create_string ~p1:0x80 ~lc:1 ~data:"\x00" (wrap_ins Verify_pin)) >>= fun () ->
+    ?buf
+    h
+    Apdu.(create_string ~p1:0x80 ~lc:1 ~data:"\x00" (wrap_ins Verify_pin))
+  >>= fun () ->
   Transport.read ?buf h >>| function
   | Transport.Status.Invalid_pin n, _ -> n
   | Transport.Status.Ok, _ -> failwith "get_remaining_pin_attempts got OK"
@@ -256,43 +243,46 @@ let get_remaining_pin_attempts ?buf h =
 
 module Public_key = struct
   type t = {
-    uncompressed : Cstruct_sexp.t ;
-    b58addr : string ;
-    bip32_chaincode : Cstruct_sexp.t ;
-  } [@@deriving sexp]
-
-  let create ~uncompressed ~b58addr ~bip32_chaincode = {
-    uncompressed ; b58addr ; bip32_chaincode
+    uncompressed : Cstruct_sexp.t;
+    b58addr : string;
+    bip32_chaincode : Cstruct_sexp.t;
   }
+  [@@deriving sexp]
+
+  let create ~uncompressed ~b58addr ~bip32_chaincode =
+    {uncompressed; b58addr; bip32_chaincode}
 
   let of_cstruct cs =
     let keylen = Cstruct.get_uint8 cs 0 in
     let uncompressed = Cstruct.create keylen in
     Cstruct.blit cs 1 uncompressed 0 keylen ;
-    let addrlen = Cstruct.get_uint8 cs (1+keylen) in
+    let addrlen = Cstruct.get_uint8 cs (1 + keylen) in
     let b58addr = Bytes.create addrlen in
-    Cstruct.blit_to_bytes cs (1+keylen+1) b58addr 0 addrlen ;
+    Cstruct.blit_to_bytes cs (1 + keylen + 1) b58addr 0 addrlen ;
     let bip32_chaincode = Cstruct.create 32 in
-    Cstruct.blit cs (1+keylen+1+addrlen) bip32_chaincode 0 32 ;
-    create
-      ~uncompressed
-      ~b58addr:(Bytes.unsafe_to_string b58addr)
-      ~bip32_chaincode,
-    Cstruct.shift cs (1+keylen+1+addrlen+32)
+    Cstruct.blit cs (1 + keylen + 1 + addrlen) bip32_chaincode 0 32 ;
+    ( create
+        ~uncompressed
+        ~b58addr:(Bytes.unsafe_to_string b58addr)
+        ~bip32_chaincode,
+      Cstruct.shift cs (1 + keylen + 1 + addrlen + 32) )
 end
 
 let get_wallet_public_key ?pp ?buf h keyPath =
   let nb_derivations = List.length keyPath in
-  if nb_derivations > 10 then invalid_arg "get_wallet_pubkeys: max 10 derivations" ;
-  let lc = 1 + 4 * nb_derivations in
+  if nb_derivations > 10 then
+    invalid_arg "get_wallet_pubkeys: max 10 derivations" ;
+  let lc = 1 + (4 * nb_derivations) in
   let data_init = Cstruct.create lc in
   Cstruct.set_uint8 data_init 0 nb_derivations ;
   let data = Cstruct.shift data_init 1 in
   let _data = Bitcoin.Wallet.KeyPath.write_be_cstruct data keyPath in
   Transport.apdu
-    ?pp ?buf h
-    Apdu.(create ~lc ~data:data_init (wrap_ins Get_wallet_public_key)) >>| fun b ->
-  fst (Public_key.of_cstruct b)
+    ?pp
+    ?buf
+    h
+    Apdu.(create ~lc ~data:data_init (wrap_ins Get_wallet_public_key))
+  >>| fun b -> fst (Public_key.of_cstruct b)
 
 let get_trusted_input ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
   let open Bitcoin in
@@ -300,130 +290,185 @@ let get_trusted_input ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
   let cs = Cstruct.create 100000 in
   Cstruct.BE.set_uint32 cs 0 (Int32.of_int index) ;
   Cstruct.LE.set_uint32 cs 4 (Int32.of_int tx.version) ;
-  let cs' = Util.CompactSize.to_cstruct_int
-      (Cstruct.shift cs 8) (Array.length tx.inputs) in
-  let init_cs = Transport.write_payload ?pp ~cmd:(wrap_ins ins)
-                  ?buf ~msg:"init" h (Cstruct.sub cs 0 cs'.off) in
-  let p1 = 0x80 in
-  ArrayLabels.fold_left ~init:init_cs tx.inputs ~f:begin fun acc txi ->
-    acc >>= fun (_ : Cstruct.t) ->
-    let cs' = Protocol.TxIn.to_cstruct cs txi in
-    match cs'.off mod Apdu.max_data_length with
-    | len when len > 0 && len < 4 ->
-       let cs1 = Cstruct.sub cs 0 (cs'.off - 4) in
-       let cs2 = Cstruct.sub cs (cs'.off - 4) 4 in
-       Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
-         h cs1 ~msg:"partial in 1" >>= fun (_ : Cstruct.t) ->
-       Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
-         h cs2 ~msg:"partial in 2"
-    | _ ->
-       Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins) h
-         ~msg:"complete in" (Cstruct.sub cs 0 cs'.off)
-    end  >>= fun (_ : Cstruct.t) ->
   let cs' =
-    Util.CompactSize.to_cstruct_int cs (Array.length tx.outputs) in
-  let out_l_cs = Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
-                   h (Cstruct.sub cs 0 cs'.off) ~msg:"out len" in
-  ArrayLabels.fold_left ~init:out_l_cs tx.outputs ~f:begin fun acc txo ->
-    acc >>= fun (_ : Cstruct.t) ->
-    let cs' = Protocol.TxOut.to_cstruct cs txo in
-    Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
-      h (Cstruct.sub cs 0 cs'.off) ~msg:"out"
-    end >>= fun (_ : Cstruct.t) ->
+    Util.CompactSize.to_cstruct_int
+      (Cstruct.shift cs 8)
+      (Array.length tx.inputs)
+  in
+  let init_cs =
+    Transport.write_payload
+      ?pp
+      ~cmd:(wrap_ins ins)
+      ?buf
+      ~msg:"init"
+      h
+      (Cstruct.sub cs 0 cs'.off)
+  in
+  let p1 = 0x80 in
+  ArrayLabels.fold_left ~init:init_cs tx.inputs ~f:(fun acc txi ->
+      acc >>= fun (_ : Cstruct.t) ->
+      let cs' = Protocol.TxIn.to_cstruct cs txi in
+      match cs'.off mod Apdu.max_data_length with
+      | len when len > 0 && len < 4 ->
+          let cs1 = Cstruct.sub cs 0 (cs'.off - 4) in
+          let cs2 = Cstruct.sub cs (cs'.off - 4) 4 in
+          Transport.write_payload
+            ?pp
+            ~p1
+            ~cmd:(wrap_ins ins)
+            h
+            cs1
+            ~msg:"partial in 1"
+          >>= fun (_ : Cstruct.t) ->
+          Transport.write_payload
+            ?pp
+            ~p1
+            ~cmd:(wrap_ins ins)
+            h
+            cs2
+            ~msg:"partial in 2"
+      | _ ->
+          Transport.write_payload
+            ?pp
+            ~p1
+            ~cmd:(wrap_ins ins)
+            h
+            ~msg:"complete in"
+            (Cstruct.sub cs 0 cs'.off))
+  >>= fun (_ : Cstruct.t) ->
+  let cs' = Util.CompactSize.to_cstruct_int cs (Array.length tx.outputs) in
+  let out_l_cs =
+    Transport.write_payload
+      ?pp
+      ~p1
+      ~cmd:(wrap_ins ins)
+      h
+      (Cstruct.sub cs 0 cs'.off)
+      ~msg:"out len"
+  in
+  ArrayLabels.fold_left ~init:out_l_cs tx.outputs ~f:(fun acc txo ->
+      acc >>= fun (_ : Cstruct.t) ->
+      let cs' = Protocol.TxOut.to_cstruct cs txo in
+      Transport.write_payload
+        ?pp
+        ~p1
+        ~cmd:(wrap_ins ins)
+        h
+        (Cstruct.sub cs 0 cs'.off)
+        ~msg:"out")
+  >>= fun (_ : Cstruct.t) ->
   let cs' = Protocol.Transaction.LockTime.to_cstruct cs tx.lock_time in
-  Transport.write_payload ?pp ~p1 ~cmd:(wrap_ins ins)
-    h (Cstruct.sub cs 0 cs'.off) ~msg:"locktime"
+  Transport.write_payload
+    ?pp
+    ~p1
+    ~cmd:(wrap_ins ins)
+    h
+    (Cstruct.sub cs 0 cs'.off)
+    ~msg:"locktime"
 
 type input_type =
   | Untrusted
   | Trusted of Cstruct.t list
   | Segwit of Int64.t list
 
-let hash_tx_input_start
-    ?pp ?buf ~new_transaction ~input_type h (tx : Bitcoin.Protocol.Transaction.t) index =
+let hash_tx_input_start ?pp ?buf ~new_transaction ~input_type h
+    (tx : Bitcoin.Protocol.Transaction.t) index =
   let open Bitcoin in
   let open Bitcoin.Util in
   let open Bitcoin.Protocol in
   let cmd = wrap_ins Hash_input_start in
-  let p2 = match new_transaction, input_type with
+  let p2 =
+    match (new_transaction, input_type) with
     | false, _ -> 0x80
     | true, Segwit _ -> 0x02
-    | _ -> 0x00 in
+    | _ -> 0x00
+  in
   let cs = Cstruct.create 100000 in
   Cstruct.LE.set_uint32 cs 0 (Int32.of_int tx.version) ;
-  let cs' = Bitcoin.Util.CompactSize.to_cstruct_int
-      (Cstruct.shift cs 4) (Array.length tx.inputs) in
+  let cs' =
+    Bitcoin.Util.CompactSize.to_cstruct_int
+      (Cstruct.shift cs 4)
+      (Array.length tx.inputs)
+  in
   let lc = cs'.off in
   let init_cs =
-    Transport.write_payload ?pp ?buf h ~cmd ~p2 (Cstruct.sub cs 0 lc) in
+    Transport.write_payload ?pp ?buf h ~cmd ~p2 (Cstruct.sub cs 0 lc)
+  in
   match input_type with
   | Segwit amounts ->
-     List.fold_left2 begin fun acc { TxIn.prev_out ; script ; seq } amount ->
-       acc >>= fun (_ : Cstruct.t) ->
-       Cstruct.set_uint8 cs 0 0x02 ;
-       let cs' = Outpoint.to_cstruct (Cstruct.shift cs 1) prev_out in
-       Cstruct.LE.set_uint64 cs' 0 amount ;
-       let cs' = Cstruct.shift cs' 8 in
-       let cs' =
-         if new_transaction then
-           CompactSize.to_cstruct_int cs' 0
-         else
-           let cs' = CompactSize.to_cstruct_int cs' (Script.size script) in
-           Script.to_cstruct cs' script
-       in
-       Cstruct.LE.set_uint32 cs' 0 seq ;
-       let lc = cs'.off + 4 in
-       Transport.write_payload ?pp ?buf h ~cmd ~p1:0x80 (Cstruct.sub cs 0 lc)
-       end init_cs (Array.to_list tx.inputs) amounts >>= fun (_ : Cstruct.t) ->
-     R.ok ()
+      List.fold_left2
+        (fun acc {TxIn.prev_out; script; seq} amount ->
+          acc >>= fun (_ : Cstruct.t) ->
+          Cstruct.set_uint8 cs 0 0x02 ;
+          let cs' = Outpoint.to_cstruct (Cstruct.shift cs 1) prev_out in
+          Cstruct.LE.set_uint64 cs' 0 amount ;
+          let cs' = Cstruct.shift cs' 8 in
+          let cs' =
+            if new_transaction then CompactSize.to_cstruct_int cs' 0
+            else
+              let cs' = CompactSize.to_cstruct_int cs' (Script.size script) in
+              Script.to_cstruct cs' script
+          in
+          Cstruct.LE.set_uint32 cs' 0 seq ;
+          let lc = cs'.off + 4 in
+          Transport.write_payload ?pp ?buf h ~cmd ~p1:0x80 (Cstruct.sub cs 0 lc))
+        init_cs
+        (Array.to_list tx.inputs)
+        amounts
+      >>= fun (_ : Cstruct.t) -> R.ok ()
   | Trusted inputs ->
-     (init_cs >>= fun (_ : Cstruct.t) ->
-      List.fold_left2 begin fun acc { TxIn.script ; seq ; _ } input ->
-        acc >>= fun i ->
-        let input_len = Cstruct.length input in
-        Cstruct.set_uint8 cs 0 0x01 ;
-        Cstruct.set_uint8 cs 1 input_len ;
-        Cstruct.blit input 0 cs 2 input_len ;
-        let cs' = Cstruct.shift cs (2+input_len) in
-        let cs' =
-          if i = index then
-            let cs' =
-              CompactSize.to_cstruct_int cs' (Script.size script) in
-            Script.to_cstruct cs' script
-          else
-            CompactSize.to_cstruct_int cs' 0
-        in
-        Cstruct.LE.set_uint32 cs' 0 seq ;
-        let lc = cs'.off + 4 in
-        Transport.write_payload
-          ?pp ?buf h ~cmd ~p1:0x80 (Cstruct.sub cs 0 lc) >>= fun (_ : Cstruct.t) ->
-        R.ok (succ i)
-        end (R.ok 0) (Array.to_list tx.inputs) inputs) >>| ignore
+      init_cs
+      >>= (fun (_ : Cstruct.t) ->
+            List.fold_left2
+              (fun acc {TxIn.script; seq; _} input ->
+                acc >>= fun i ->
+                let input_len = Cstruct.length input in
+                Cstruct.set_uint8 cs 0 0x01 ;
+                Cstruct.set_uint8 cs 1 input_len ;
+                Cstruct.blit input 0 cs 2 input_len ;
+                let cs' = Cstruct.shift cs (2 + input_len) in
+                let cs' =
+                  if i = index then
+                    let cs' =
+                      CompactSize.to_cstruct_int cs' (Script.size script)
+                    in
+                    Script.to_cstruct cs' script
+                  else CompactSize.to_cstruct_int cs' 0
+                in
+                Cstruct.LE.set_uint32 cs' 0 seq ;
+                let lc = cs'.off + 4 in
+                Transport.write_payload
+                  ?pp
+                  ?buf
+                  h
+                  ~cmd
+                  ~p1:0x80
+                  (Cstruct.sub cs 0 lc)
+                >>= fun (_ : Cstruct.t) -> R.ok (succ i))
+              (R.ok 0)
+              (Array.to_list tx.inputs)
+              inputs)
+      >>| ignore
   | _ -> invalid_arg "unsupported input type"
 
 let hash_tx_finalize_full ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) =
   let open Bitcoin in
   let cs = Cstruct.create 100000 in
-  let cs' =
-    Util.CompactSize.to_cstruct_int cs (Array.length tx.outputs) in
-  let cs' =
-    Array.fold_left Protocol.TxOut.to_cstruct cs' tx.outputs in
-  Transport.write_payload ?pp
+  let cs' = Util.CompactSize.to_cstruct_int cs (Array.length tx.outputs) in
+  let cs' = Array.fold_left Protocol.TxOut.to_cstruct cs' tx.outputs in
+  Transport.write_payload
+    ?pp
     ~msg:"hash_tx_finalize_full"
     ~mark_last:true
     ~cmd:(wrap_ins Hash_input_finalize_full)
-    ?buf h  (Cstruct.sub cs 0 cs'.off)
+    ?buf
+    h
+    (Cstruct.sub cs 0 cs'.off)
 
 module HashType = struct
-  type typ =
-    | All
-    | None
-    | Single
+  type typ = All | None | Single
 
-  let int_of_typ = function
-    | All -> 1
-    | None -> 2
-    | Single -> 3
+  let int_of_typ = function All -> 1 | None -> 2 | Single -> 3
 
   let typ_of_int = function
     | 1 -> All
@@ -431,95 +476,123 @@ module HashType = struct
     | 3 -> Single
     | _ -> invalid_arg "HashType.typ_of_int"
 
-  type flag =
-    | ForkId
-    | AnyoneCanPay
+  type flag = ForkId | AnyoneCanPay
 
-  let int_of_flag = function
-    | ForkId -> 0x40
-    | AnyoneCanPay -> 0x80
+  let int_of_flag = function ForkId -> 0x40 | AnyoneCanPay -> 0x80
 
   let flags_of_int i =
     let forkid = i land 0x40 <> 0 in
     let anyonecanpay = i land 0x80 <> 0 in
-    ListLabels.fold_left ~init:[] ~f:begin fun a (flag, is_present) ->
-      if is_present then flag :: a else a
-    end [ForkId, forkid ; AnyoneCanPay, anyonecanpay]
+    ListLabels.fold_left
+      ~init:[]
+      ~f:(fun a (flag, is_present) -> if is_present then flag :: a else a)
+      [(ForkId, forkid); (AnyoneCanPay, anyonecanpay)]
 
-  type t = {
-    typ: typ ;
-    flags: flag list ;
-  }
+  type t = {typ : typ; flags : flag list}
 
-  let create ~typ ~flags = { typ ; flags }
+  let create ~typ ~flags = {typ; flags}
 
-  let to_int { typ ; flags } =
-    List.fold_left begin fun a flag ->
-      a lor (int_of_flag flag)
-    end (int_of_typ typ) flags
+  let to_int {typ; flags} =
+    List.fold_left (fun a flag -> a lor int_of_flag flag) (int_of_typ typ) flags
 
-  let of_int i =
-    { typ = typ_of_int (i land 0x07) ; flags = flags_of_int i }
+  let of_int i = {typ = typ_of_int (i land 0x07); flags = flags_of_int i}
 end
 
-let hash_sign ?pp ?buf ~path ~hash_type ~hash_flags h (tx : Bitcoin.Protocol.Transaction.t) =
+let hash_sign ?pp ?buf ~path ~hash_type ~hash_flags h
+    (tx : Bitcoin.Protocol.Transaction.t) =
   let open Bitcoin in
   let nb_derivations = List.length path in
   if nb_derivations > 10 then invalid_arg "hash_sign: max 10 derivations" ;
-  let lc = 1 + 4 * nb_derivations + 1 + 4 + 1 in
+  let lc = 1 + (4 * nb_derivations) + 1 + 4 + 1 in
   let cs = Cstruct.create lc in
   Cstruct.set_uint8 cs 0 nb_derivations ;
   let cs' = Bitcoin.Wallet.KeyPath.write_be_cstruct (Cstruct.shift cs 1) path in
   Cstruct.set_uint8 cs' 0 0 ;
-  Cstruct.BE.set_uint32 cs' 1 (Protocol.Transaction.LockTime.to_int32 tx.lock_time) ;
-  Cstruct.set_uint8 cs' 5
+  Cstruct.BE.set_uint32
+    cs'
+    1
+    (Protocol.Transaction.LockTime.to_int32 tx.lock_time) ;
+  Cstruct.set_uint8
+    cs'
+    5
     HashType.(create ~typ:hash_type ~flags:hash_flags |> to_int) ;
   assert (cs'.off + 6 = lc) ;
   Transport.apdu
-    ?pp ~msg:"hash_sign" ?buf h
-    Apdu.(create ~lc ~data:cs (wrap_ins Hash_sign)) >>| fun signature ->
+    ?pp
+    ~msg:"hash_sign"
+    ?buf
+    h
+    Apdu.(create ~lc ~data:cs (wrap_ins Hash_sign))
+  >>| fun signature ->
   Cstruct.set_uint8 signature 0 0x30 ;
   signature
 
 let sign ?pp ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
-  ListLabels.fold_right
-    prev_outputs ~init:(R.ok [])
-    ~f:(fun (tx, i) acc ->
+  ListLabels.fold_right prev_outputs ~init:(R.ok []) ~f:(fun (tx, i) acc ->
       acc >>= fun tail ->
       get_trusted_input ?buf h tx i >>| fun input ->
-      let () = assert (Cstruct.length input = 56) in input :: tail) >>= fun trusted_inputs ->
-  ArrayLabels.fold_left ~init:(R.ok (0, [])) tx.inputs ~f:begin fun res _ ->
-    res >>= fun  (i, acc) ->
-    hash_tx_input_start ?pp ?buf
-      ~new_transaction:(i = 0)
-      ~input_type:(Trusted trusted_inputs) h tx i >>= fun () ->
-    let _ret = hash_tx_finalize_full ?pp ?buf h tx in
-    hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags:[] h tx >>| fun signature ->
-    succ i, signature :: acc
-    end >>| snd
+      let () = assert (Cstruct.length input = 56) in
+      input :: tail)
+  >>= fun trusted_inputs ->
+  ArrayLabels.fold_left
+    ~init:(R.ok (0, []))
+    tx.inputs
+    ~f:(fun res _ ->
+      res >>= fun (i, acc) ->
+      hash_tx_input_start
+        ?pp
+        ?buf
+        ~new_transaction:(i = 0)
+        ~input_type:(Trusted trusted_inputs)
+        h
+        tx
+        i
+      >>= fun () ->
+      let _ret = hash_tx_finalize_full ?pp ?buf h tx in
+      hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags:[] h tx
+      >>| fun signature -> (succ i, signature :: acc))
+  >>| snd
 
-let sign_segwit ?pp ?(bch=false) ?buf ~path ~prev_amounts h (tx : Bitcoin.Protocol.Transaction.t) =
+let sign_segwit ?pp ?(bch = false) ?buf ~path ~prev_amounts h
+    (tx : Bitcoin.Protocol.Transaction.t) =
   let nb_prev_amounts = List.length prev_amounts in
   let nb_inputs = Array.length tx.inputs in
-  if nb_prev_amounts <> nb_inputs then invalid_arg
-      (Printf.sprintf "Bch.sign: prev_amounts do not match inputs (%d inputs vs %d amounts)"
-         nb_inputs nb_prev_amounts) ;
+  if nb_prev_amounts <> nb_inputs then
+    invalid_arg
+      (Printf.sprintf
+         "Bch.sign: prev_amounts do not match inputs (%d inputs vs %d amounts)"
+         nb_inputs
+         nb_prev_amounts) ;
   let open Bitcoin.Protocol in
   hash_tx_input_start
-    ?pp ?buf ~new_transaction:true ~input_type:(Segwit prev_amounts) h tx 0 >>= fun () ->
+    ?pp
+    ?buf
+    ~new_transaction:true
+    ~input_type:(Segwit prev_amounts)
+    h
+    tx
+    0
+  >>= fun () ->
   let _pin_required = hash_tx_finalize_full ?pp ?buf h tx in
   ListLabels.fold_right2
-    (Array.to_list tx.inputs) prev_amounts ~init:(R.ok [])
-    ~f:begin fun txi prev_amount acc ->
-    acc >>= fun tail ->
-    let virtual_tx = { tx with inputs = [|txi|] ; outputs = [||] } in
-    hash_tx_input_start ?pp ?buf
-      ~new_transaction:false
-      ~input_type:(Segwit [prev_amount]) h virtual_tx 0 >>= fun () ->
-    let hash_flags = if bch then [HashType.ForkId] else [] in
-    hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags h virtual_tx >>|
-      fun signature -> signature::tail
-    end
+    (Array.to_list tx.inputs)
+    prev_amounts
+    ~init:(R.ok [])
+    ~f:(fun txi prev_amount acc ->
+      acc >>= fun tail ->
+      let virtual_tx = {tx with inputs = [|txi|]; outputs = [||]} in
+      hash_tx_input_start
+        ?pp
+        ?buf
+        ~new_transaction:false
+        ~input_type:(Segwit [prev_amount])
+        h
+        virtual_tx
+        0
+      >>= fun () ->
+      let hash_flags = if bch then [HashType.ForkId] else [] in
+      hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags h virtual_tx
+      >>| fun signature -> signature :: tail)
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

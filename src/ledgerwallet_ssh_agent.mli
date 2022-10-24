@@ -3,16 +3,17 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
-type curve =
-  | Prime256v1
-  | Curve25519
+type curve = Prime256v1 | Curve25519
 
-val get_public_key :
-  ?pp:Format.formatter -> ?buf:Cstruct.t ->
-  curve:curve -> path:int32 list -> Hidapi.t ->
-  (Cstruct.t, Ledgerwallet.Transport.error) result
 (** [get_public_key ?pp ?buf ledger path] returns the (uncompressed)
     public key from [ledger] at BIP32 derivation [path]. *)
+val get_public_key :
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  curve:curve ->
+  path:int32 list ->
+  Hidapi.t ->
+  (Cstruct.t, Ledgerwallet.Transport.error) result
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff
