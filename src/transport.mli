@@ -3,42 +3,6 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
-module Status : sig
-  type t = ..
-
-  type t +=
-    | Invalid_pin of int
-    | Incorrect_length
-    | Incorrect_length_for_ins
-    | Incompatible_file_structure
-    | Security_status_unsatisfied
-    | Hid_required
-    | Conditions_of_use_not_satisfied
-    | Incorrect_data
-    | File_not_found
-    | Parse_error
-    | Incorrect_params
-    | Incorrect_class
-    | Ins_not_supported
-    | Memory_error
-    | Referenced_data_not_found
-    | Technical_problem of int
-    | Ok
-    | Unknown of int
-
-  val register_string_f : (t -> string option) -> unit
-
-  val to_string : t -> string
-
-  val register_help_suggestor_f : (t -> string option) -> unit
-
-  val to_help_suggestion : t -> string option
-
-  val show : t -> string
-
-  val pp : Format.formatter -> t -> unit
-end
-
 module Header : sig
   module Error : sig
     type t =

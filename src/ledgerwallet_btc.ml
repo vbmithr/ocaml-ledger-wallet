@@ -237,9 +237,9 @@ let get_remaining_pin_attempts ?buf h =
     Apdu.(create_string ~p1:0x80 ~lc:1 ~data:"\x00" (wrap_ins Verify_pin))
   >>= fun () ->
   Transport.read ?buf h >>| function
-  | Transport.Status.Invalid_pin n, _ -> n
-  | Transport.Status.Ok, _ -> failwith "get_remaining_pin_attempts got OK"
-  | s, _ -> failwith (Transport.Status.to_string s)
+  | Status.Invalid_pin n, _ -> n
+  | Status.Ok, _ -> failwith "get_remaining_pin_attempts got OK"
+  | s, _ -> failwith (Status.to_string s)
 
 module Public_key = struct
   type t = {

@@ -10,7 +10,7 @@ module Version : sig
 
   val pp_app_class : Format.formatter -> app_class -> unit
 
-  type Transport.Status.t += Tezos_impossible_to_read_version
+  type Status.t += Tezos_impossible_to_read_version
 
   type t = {app_class : app_class; major : int; minor : int; patch : int}
 
