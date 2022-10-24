@@ -25,10 +25,10 @@ module Version = struct
 
   let create ~app_class ~major ~minor ~patch = {app_class; major; minor; patch}
 
-  type Transport.Status.t += Tezos_impossible_to_read_version
+  type Status.t += Tezos_impossible_to_read_version
 
   let () =
-    Transport.Status.register_string_f (function
+    Status.register_string_f (function
         | Tezos_impossible_to_read_version -> Some "Impossible to read version"
         | _ -> None)
 
@@ -116,12 +116,10 @@ let curve_of_int = function
   | 0x03 -> Some Bip32_ed25519
   | _ -> None
 
-type Transport.Status.t +=
-  | Tezos_invalid_curve_code of int
-  | Payload_too_big of int
+type Status.t += Tezos_invalid_curve_code of int | Payload_too_big of int
 
 let () =
-  Transport.Status.register_string_f (function
+  Status.register_string_f (function
       | Tezos_invalid_curve_code curve_code ->
           Some ("Unrecognized curve code: " ^ string_of_int curve_code)
       | Payload_too_big size ->
@@ -129,17 +127,17 @@ let () =
       | _ -> None)
 
 let () =
-  Transport.Status.register_help_suggestor_f (function
-      | Transport.Status.Conditions_of_use_not_satisfied ->
+  Status.register_help_suggestor_f (function
+      | Status.Conditions_of_use_not_satisfied ->
           Some
             "Either you rejected the operation or you waited long enough to \
              respond that the device rejected it for you."
-      | Transport.Status.Incorrect_class ->
+      | Status.Incorrect_class ->
           Some
             "A Tezos application wasn't found on the device. Is the Tezos \
              Wallet or Tezos Baking application open on the device? Is the \
              device busy talking to another process?"
-      | Transport.Status.Security_status_unsatisfied ->
+      | Status.Security_status_unsatisfied ->
           Some
             "The operation was automatically rejected for security reasons. If \
              baking, you may need to setup the device or reset the high-water \
