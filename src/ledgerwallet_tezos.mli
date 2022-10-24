@@ -30,7 +30,7 @@ val pp_curve_short : Format.formatter -> curve -> unit
 val get_version :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (Version.t, Transport.error) result
 
 (** [get_git_commit ?pp ?buf ledger] is the git commit information of
@@ -38,7 +38,7 @@ val get_version :
 val get_git_commit :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (string, Transport.error) result
 
 (** [get_authorized_key ?pp ?buf ledger] is the BIP32 path of the key
@@ -46,7 +46,7 @@ val get_git_commit :
 val get_authorized_key :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (int32 list, Transport.error) result
 
 (** [get_authorized_path_and_curve ?pp ?buf ledger] is the BIP32 path
@@ -55,7 +55,7 @@ val get_authorized_key :
 val get_authorized_path_and_curve :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (int32 list * curve, Transport.error) result
 
 (** [get_public_key ?pp ?buf ?prompt ledger curve path] is [0x02 ||
@@ -66,7 +66,7 @@ val get_public_key :
   ?prompt:bool ->
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   curve ->
   int32 list ->
   (Cstruct.t, Transport.error) result
@@ -80,7 +80,7 @@ val get_public_key :
 val authorize_baking :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   curve ->
   int32 list ->
   (Cstruct.t, Transport.error) result
@@ -94,7 +94,7 @@ val authorize_baking :
 val setup_baking :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   main_chain_id:string ->
   main_hwm:int32 ->
   test_hwm:int32 ->
@@ -107,7 +107,7 @@ val setup_baking :
 val deauthorize_baking :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (unit, Transport.error) result
 
 (** [get_high_watermark ?pp ?buf ledger] is the current value of the
@@ -117,7 +117,7 @@ val deauthorize_baking :
 val get_high_watermark :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (int32 * int32 option, Transport.error) result
 
 (** Query the high water marks for the main and test chains, as well as the ID
@@ -125,7 +125,7 @@ val get_high_watermark :
 val get_all_high_watermarks :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   ( [`Main_hwm of int32 * int32 option]
     * [`Test_hwm of int32 * int32 option]
     * [`Chain_id of string],
@@ -139,7 +139,7 @@ val get_all_high_watermarks :
 val set_high_watermark :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   int32 ->
   (unit, Transport.error) result
 
@@ -151,7 +151,7 @@ val sign :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   ?hash_on_ledger:bool ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   curve ->
   int32 list ->
   Cstruct.t ->
@@ -163,7 +163,7 @@ val sign :
 val get_deterministic_nonce :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   curve ->
   int32 list ->
   Cstruct.t ->
@@ -176,7 +176,7 @@ val get_deterministic_nonce :
 val sign_and_hash :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   curve ->
   int32 list ->
   Cstruct.t ->

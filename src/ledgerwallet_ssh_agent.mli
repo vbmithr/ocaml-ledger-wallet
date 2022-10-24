@@ -12,7 +12,7 @@ val get_public_key :
   ?buf:Cstruct.t ->
   curve:curve ->
   path:int32 list ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (Cstruct.t, Ledgerwallet.Transport.error) result
 
 (*---------------------------------------------------------------------------

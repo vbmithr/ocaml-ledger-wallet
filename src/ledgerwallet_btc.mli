@@ -47,45 +47,47 @@ end
 
 val get_random :
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   int ->
   (string, Ledgerwallet.Transport.error) result
 
 val get_operation_mode :
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (Operation_mode.t, Ledgerwallet.Transport.error) result
 
 val get_second_factor :
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (Second_factor.t, Ledgerwallet.Transport.error) result
 
 val get_firmware_version :
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (Firmware_version.t, Ledgerwallet.Transport.error) result
 
 val verify_pin :
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   string ->
   ([`Ok | `Need_power_cycle], Ledgerwallet.Transport.error) result
 
 val get_remaining_pin_attempts :
-  ?buf:Cstruct.t -> Hidapi.t -> (int, Ledgerwallet.Transport.error) result
+  ?buf:Cstruct.t ->
+  Ledgerwallet.Transport.t ->
+  (int, Ledgerwallet.Transport.error) result
 
 val get_wallet_public_key :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   Bitcoin.Wallet.KeyPath.t ->
   (Public_key.t, Ledgerwallet.Transport.error) result
 
 val get_trusted_input :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
   int ->
   (Cstruct.t, Ledgerwallet.Transport.error) result
@@ -100,7 +102,7 @@ val hash_tx_input_start :
   ?buf:Cstruct.t ->
   new_transaction:bool ->
   input_type:input_type ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
   int ->
   (unit, Ledgerwallet.Transport.error) result
@@ -108,7 +110,7 @@ val hash_tx_input_start :
 val hash_tx_finalize_full :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
   (Cstruct.t, Ledgerwallet.Transport.error) result
 
@@ -126,7 +128,7 @@ val hash_sign :
   path:Bitcoin.Wallet.KeyPath.t ->
   hash_type:HashType.typ ->
   hash_flags:HashType.flag list ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
   (Cstruct.t, Ledgerwallet.Transport.error) result
 
@@ -135,7 +137,7 @@ val sign :
   ?buf:Cstruct.t ->
   path:Bitcoin.Wallet.KeyPath.t ->
   prev_outputs:(Bitcoin.Protocol.Transaction.t * int) list ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
   (Cstruct.t list, Ledgerwallet.Transport.error) result
 
@@ -145,7 +147,7 @@ val sign_segwit :
   ?buf:Cstruct.t ->
   path:Bitcoin.Wallet.KeyPath.t ->
   prev_amounts:Int64.t list ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
   (Cstruct.t list, Ledgerwallet.Transport.error) result
 
