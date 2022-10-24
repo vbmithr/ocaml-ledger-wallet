@@ -18,6 +18,8 @@ let check_buflen cs =
   if cslen < packet_length then
     invalid_arg ("HID packets must be 64 bytes long, got " ^ string_of_int cslen)
 
+type t = Hidapi of Hidapi.t
+
 module Header = struct
   type t = {cmd : cmd; seq : int}
 
@@ -74,12 +76,12 @@ module Header = struct
 end
 
 type transport_error =
-  | Hidapi of string
+  | Hidapi_error of string
   | Incomplete_write of int
   | Incomplete_read of int
 
 let pp_transport_error ppf = function
-  | Hidapi s -> Format.pp_print_string ppf s
+  | Hidapi_error s -> Format.pp_print_string ppf s
   | Incomplete_write i ->
       Format.fprintf ppf "wrote %d bytes, expected to write 64 bytes" i
   | Incomplete_read i ->
@@ -109,19 +111,28 @@ let check_nbread = function
   | n when n = packet_length -> R.ok ()
   | n -> R.error (TransportError (Incomplete_read n))
 
+let with_connection ~vendor_id ~product_id f =
+  let h = Hidapi.open_id_exn ~vendor_id ~product_id in
+  try let out = f (Hidapi h) in
+    Hidapi.close h ;
+    out
+  with exn ->
+    Hidapi.close h ;
+    raise exn
+
 let write_hidapi h ?len buf =
   R.reword_error
-    (fun s -> TransportError (Hidapi s))
+    (fun s -> TransportError (Hidapi_error s))
     (Hidapi.write h ?len Cstruct.(to_bigarray (sub buf 0 packet_length)))
   >>= check_nbwritten
 
 let read_hidapi ?timeout h buf =
   R.reword_error
-    (fun s -> TransportError (Hidapi s))
+    (fun s -> TransportError (Hidapi_error s))
     (Hidapi.read ?timeout h buf packet_length)
   >>= check_nbread
 
-let write_ping ?(buf = Cstruct.create packet_length) h =
+let write_ping ?(buf = Cstruct.create packet_length) (Hidapi h) =
   check_buflen buf ;
   let open Cstruct in
   BE.set_uint16 buf 0 channel ;
@@ -130,7 +141,7 @@ let write_ping ?(buf = Cstruct.create packet_length) h =
   memset (sub buf 5 59) 0 ;
   write_hidapi h buf
 
-let write_apdu ?pp ?(buf = Cstruct.create packet_length) h p =
+let write_apdu ?pp ?(buf = Cstruct.create packet_length) (Hidapi h) p =
   check_buflen buf ;
   let apdu_len = Apdu.length p in
   let apdu_buf = Cstruct.create apdu_len in
@@ -172,7 +183,7 @@ let write_apdu ?pp ?(buf = Cstruct.create packet_length) h p =
   in
   inner !apdu_p
 
-let read ?pp ?(buf = Cstruct.create packet_length) h =
+let read ?pp ?(buf = Cstruct.create packet_length) (Hidapi h) =
   check_buflen buf ;
   let expected_seq = ref 0 in
   let full_payload = ref (Cstruct.create 0) in

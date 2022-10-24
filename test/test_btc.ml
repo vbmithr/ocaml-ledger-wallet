@@ -33,17 +33,18 @@ let nextTx =
   let output = TxOut.create ~value ~script:my_out.script in
   Transaction.create ~inputs:[|input|] ~outputs:[|output|] ()
 
+let fail_on_error = function
+  | Result.Ok () -> ()
+  | Result.Error e ->
+      Alcotest.fail
+        (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
+
 let with_connection f =
-  let h = Hidapi.open_id_exn ~vendor_id:0x2C97 ~product_id:0x0001 in
-  try
-    match f h with
-    | Result.Ok () -> Hidapi.close h
-    | Result.Error e ->
-        failwith
-          (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
-  with exn ->
-    Hidapi.close h ;
-    raise exn
+  fail_on_error
+    (Ledgerwallet.Transport.with_connection
+       ~vendor_id:0x2C97
+       ~product_id:0x0001
+       f)
 
 let test_open_close () = with_connection (fun _ -> R.ok ())
 

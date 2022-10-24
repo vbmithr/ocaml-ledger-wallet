@@ -6,14 +6,14 @@
 val get_version :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   (int * int * int, Ledgerwallet.Transport.error) result
 
 val get_pk :
   ?display_addr:bool ->
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   int32 ->
   (Cstruct.t * [`Zil] Bech32.Segwit.t, Ledgerwallet.Transport.error) result
 
@@ -21,7 +21,7 @@ val get_pk :
 val sign_hash :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   int32 ->
   Cstruct.t ->
   (Cstruct.t, Ledgerwallet.Transport.error) result
@@ -30,7 +30,7 @@ val sign_hash :
 val sign_txn :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  Ledgerwallet.Transport.t ->
   int32 ->
   Cstruct.t ->
   (Cstruct.t, Ledgerwallet.Transport.error) result

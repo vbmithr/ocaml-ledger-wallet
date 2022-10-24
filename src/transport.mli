@@ -3,6 +3,8 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
+type t
+
 module Header : sig
   module Error : sig
     type t =
@@ -14,7 +16,7 @@ module Header : sig
 end
 
 type transport_error =
-  | Hidapi of string
+  | Hidapi_error of string
   | Incomplete_write of int
   | Incomplete_read of int
 
@@ -27,26 +29,27 @@ val app_error : msg:string -> ('a, Status.t) result -> ('a, error) result
 
 val pp_error : Format.formatter -> error -> unit
 
+val with_connection :
+  vendor_id:int ->
+  product_id:int ->
+  (t -> (unit, error) result) ->
+  (unit, error) result
+
 (** [write_apdu ?pp ?buf ledger apdu] writes [apdu] to [ledger]. *)
 val write_apdu :
-  ?pp:Format.formatter ->
-  ?buf:Cstruct.t ->
-  Hidapi.t ->
-  Apdu.t ->
-  (unit, error) result
+  ?pp:Format.formatter -> ?buf:Cstruct.t -> t -> Apdu.t -> (unit, error) result
 
 (** [read ?pp ?buf ledger] reads from [ledger] a status response and a
     payload. *)
 val read :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  t ->
   (Status.t * Cstruct.t, error) result
 
 (** [ping ?pp ?buf ledger] writes a ping packet to [ledger],
     optionally containing [buf]. *)
-val ping :
-  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> (unit, error) result
+val ping : ?pp:Format.formatter -> ?buf:Cstruct.t -> t -> (unit, error) result
 
 (** [apdu ?pp ?msg ?buf ledger apdu] writes [apdu] to [ledger] and
     returns the response. *)
@@ -54,7 +57,7 @@ val apdu :
   ?pp:Format.formatter ->
   ?msg:string ->
   ?buf:Cstruct.t ->
-  Hidapi.t ->
+  t ->
   Apdu.t ->
   (Cstruct.t, error) result
 
@@ -69,7 +72,7 @@ val write_payload :
   cmd:Apdu.cmd ->
   ?p1:int ->
   ?p2:int ->
-  Hidapi.t ->
+  t ->
   Cstruct.t ->
   (Cstruct.t, error) result
 
