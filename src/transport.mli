@@ -11,20 +11,26 @@ type error =
   | AppError of {status : Status.t; msg : string}
   | TransportError of transport_error
 
+type proxy_path
+
+type path = Hidapi_path of Hidapi.device_info | Proxy_path of proxy_path
+
+val enumerate : unit -> path list
+
 val app_error : msg:string -> ('a, Status.t) result -> ('a, error) result
 
 val pp_error : Format.formatter -> error -> unit
 
 val open_id : vendor_id:int -> product_id:int -> t option
 
-val open_path : string -> t option
+val open_path : path -> t option
 
 val close : t -> unit
 
 val with_connection_id :
   vendor_id:int -> product_id:int -> (t -> 'a) -> 'a option
 
-val with_connection_path : string -> (t -> 'a) -> 'a option
+val with_connection_path : path -> (t -> 'a) -> 'a option
 
 (** [write_apdu ?pp ?buf ledger apdu] writes [apdu] to [ledger]. *)
 val write_apdu :
