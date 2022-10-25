@@ -7,6 +7,13 @@ open Rresult
 
 type t = Hidapi of Hidapi.t | Proxy of Transport_proxy.t
 
+type hidapi_path = Hidapi.device_info
+type proxy_path = {addr : string option; port : int option}
+
+type path =
+  | Hidapi_path of hidapi_path
+  | Proxy_path of proxy_path
+
 type transport_error =
   | HidapiError of Transport_hidapi.error
   | ProxyError of Transport_proxy.error
@@ -23,20 +30,53 @@ let pp_error ppf = function
   | TransportError (HidapiError e) -> Transport_hidapi.pp_error ppf e
   | TransportError (ProxyError e) -> Transport_proxy.pp_error ppf e
 
-let create open_ =
-  let name = Sys.getenv_opt "LEDGER_PROXY_ADDRESS" in
+module Ids = struct
+  let ( -- ) i j = List.init (j - i + 1) (fun x -> x + i)
+
+  (* Those constants are provided by the vendor (e.g. check the udev
+     rules they provide): *)
+  let vendor_id = 0x2c97
+
+  (* These come from the ledger's udev rules *)
+  let nano_s_product_ids = [0x0001] @ (0x1000 -- 0x101f)
+
+  let nano_x_product_ids = [0x0004] @ (0x4000 -- 0x401f)
+
+  let nano_s_plus_product_ids = [0x0005] @ (0x5000 -- 0x501f)
+end
+
+let enumerate_hidapi () =
+  let open Ids in
+  let all_product_ids =
+    nano_s_product_ids @ nano_x_product_ids @ nano_s_plus_product_ids
+  in
+  let open Hidapi in
+  List.filter_map
+    (fun hid ->
+      if List.exists (fun (v : int) -> v = hid.product_id) all_product_ids then
+        Some (Hidapi_path hid)
+      else None)
+    (enumerate ~vendor_id ())
+
+let enumerate_proxy () =
+  let addr = Sys.getenv_opt "LEDGER_PROXY_ADDRESS" in
   let port =
     Option.bind (Sys.getenv_opt "LEDGER_PROXY_PORT") (fun s ->
         try Some (int_of_string s) with _ -> None)
   in
-  match (name, port) with
-  | None, None -> Option.map (fun x -> Hidapi x) (open_ ())
-  | _, _ -> Some (Proxy (Transport_proxy.create ?name ?port ()))
+  match (addr, port) with None, None -> [] | _ -> [Proxy_path {addr; port}]
+
+let enumerate () = enumerate_proxy () @ enumerate_hidapi ()
 
 let open_id ~vendor_id ~product_id =
-  create (fun () -> Hidapi.open_id ~vendor_id ~product_id)
+  Option.map (fun o -> Hidapi o) (Hidapi.open_id ~vendor_id ~product_id)
 
-let open_path path = create (fun () -> Hidapi.open_path path)
+let open_path (path : path) =
+  match path with
+  | Hidapi_path device_info ->
+      Option.map (fun o -> Hidapi o) (Hidapi.open_path device_info.Hidapi.path)
+  | Proxy_path {addr; port} ->
+      Some (Proxy (Transport_proxy.create ?name:addr ?port ()))
 
 let close = function
   | Hidapi h -> Hidapi.close h
