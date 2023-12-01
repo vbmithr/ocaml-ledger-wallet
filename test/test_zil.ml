@@ -1,23 +1,28 @@
-open Rresult
 open Ledgerwallet_zil
-open Alcotest
+open Lwt_result.Infix
+
+let return_unit = Lwt.return_ok ()
 
 let vendor_id = 0x2C97
 
 let product_id = 0x1015
 
-let fail_on_error = function
-  | None -> Alcotest.fail "Found no ledger."
-  | Some (Result.Ok ()) -> ()
-  | Some (Result.Error e) ->
-      Alcotest.fail
-        (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
+let fail_on_error x =
+  Lwt.bind x (function
+      | None -> Alcotest.fail "Found no ledger."
+      | Some (Ok ()) -> Lwt.return_unit
+      | Some (Error e) ->
+          Alcotest.fail
+            (Format.asprintf
+               "Ledger error: %a"
+               Ledgerwallet.Transport.pp_error
+               e))
 
 let with_connection f =
   fail_on_error
     (Ledgerwallet.Transport.with_connection_id ~vendor_id ~product_id f)
 
-let test_open_close () = with_connection (fun _ -> R.ok ())
+let test_open_close () = with_connection (fun _ -> return_unit)
 
 let test_ping () = with_connection Ledgerwallet.Transport.ping
 
@@ -25,32 +30,32 @@ let hard x = Int32.logor x 0x8000_0000l
 
 let test_getversion () =
   with_connection (fun h ->
-      get_version h >>| fun (ma, mi, pa) -> Printf.printf "%d.%d.%d" ma mi pa)
+      get_version h >|= fun (ma, mi, pa) -> Printf.printf "%d.%d.%d" ma mi pa)
 
 let test_getpk ~display_addr () =
   with_connection (fun h ->
-      get_pk ~display_addr h 0l >>| fun (pk, addr) ->
+      get_pk ~display_addr h 0l >|= fun (pk, addr) ->
       match Bech32.Segwit.encode addr with
-      | Error msg -> fail msg
+      | Error msg -> Alcotest.fail msg
       | Ok v -> Format.printf "%a %s" Hex.pp (Hex.of_cstruct pk) v)
 
 (* let path = [
  *   hard 44l ; hard 1729l
  * ]
- * 
+ *
  * let msg = Cstruct.of_string "Voulez-vous coucher avec moi, ce soir ?"
  * let msg_ba = Cstruct.to_bigarray msg
- * 
+ *
  * let test_getpk h curve =
  *   let pk = get_public_key h curve path in
  *   Alcotest.(check int "pklen"
  *               (if curve = Ed25519 then 33 else 65) (Cstruct.length pk))
- * 
+ *
  * let test_getpk () =
  *   let h = Hidapi.open_id_exn ~vendor_id ~product_id in
  *   List.iter (test_getpk h) curves ;
  *   Hidapi.close h
- * 
+ *
  * let test_sign h curve =
  *   let open Alcotest in
  *   let pk = get_public_key h curve path in
@@ -76,7 +81,7 @@ let test_getpk ~display_addr () =
  *       | Some pk ->
  *           check bool "sign Secp256r1" true (Uecc.verify pk ~msg:msg_ba ~signature)
  *     end
- * 
+ *
  * let test_sign () =
  *   let h = Hidapi.open_id_exn ~vendor_id ~product_id in
  *   (\* List.iter (test_sign h) curves ; *\)
@@ -94,4 +99,4 @@ let basic =
      * "sign", `Quick, test_sign ; *);
   ]
 
-let () = Alcotest.run "ledgerwallet.zil" [("basic", basic)]
+let () = Lwt_main.run @@ Alcotest_lwt.run "ledgerwallet.zil" [("basic", basic)]

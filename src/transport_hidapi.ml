@@ -4,6 +4,12 @@
   ---------------------------------------------------------------------------*)
 
 open Rresult
+open Lwt_result
+open Lwt_result.Infix
+
+let return_unit = Lwt.return (Ok ())
+
+let ok_unit = Ok ()
 
 let packet_length = 64
 
@@ -40,32 +46,33 @@ module Header = struct
             actual
   end
 
-  let fail_header_too_short i = R.error (Error.Header_too_short i)
+  let header_too_short_error i = Error (Error.Header_too_short i)
 
-  let fail_invalid_chan i = R.error (Error.Invalid_channel i)
+  let invalid_chan_error i = Error (Error.Invalid_channel i)
 
-  let fail_invalid_cmd i = R.error (Error.Invalid_command_tag i)
+  let invalid_cmd_error i = Error (Error.Invalid_command_tag i)
 
-  let fail_unexpected_seqnum ~expected ~actual =
-    R.error (Error.Unexpected_sequence_number {expected; actual})
+  let unexpected_seqnum_error ~expected ~actual =
+    Error (Error.Unexpected_sequence_number {expected; actual})
 
-  let read cs =
+  let read cs : (t * Cstruct.t, Error.t) result =
+    let open Rresult in
     let cslen = Cstruct.length cs in
-    (if cslen < 5 then fail_header_too_short cslen else R.ok ()) >>= fun () ->
+    (if cslen < 5 then header_too_short_error cslen else ok_unit) >>= fun () ->
     let channel_id = Cstruct.BE.get_uint16 cs 0 in
     let cmd = Cstruct.get_uint8 cs 2 in
     let seq = Cstruct.BE.get_uint16 cs 3 in
-    (if channel_id <> channel then fail_invalid_chan channel_id else R.ok ())
+    (if channel_id <> channel then invalid_chan_error channel_id else ok_unit)
     >>= fun () ->
     (match cmd_of_int cmd with
-    | Some cmd -> R.ok cmd
-    | None -> fail_invalid_cmd cmd)
-    >>= fun cmd -> R.ok ({cmd; seq}, Cstruct.shift cs 5)
+    | Some cmd -> Ok cmd
+    | None -> invalid_cmd_error cmd)
+    >>= fun cmd -> Ok ({cmd; seq}, Cstruct.shift cs 5)
 
   let check_seqnum t expected_seq =
     if expected_seq <> t.seq then
-      fail_unexpected_seqnum ~actual:t.seq ~expected:expected_seq
-    else R.ok ()
+      unexpected_seqnum_error ~actual:t.seq ~expected:expected_seq
+    else ok_unit
 end
 
 type error =
@@ -98,23 +105,23 @@ let check_buflen cs =
     invalid_arg ("HID packets must be 64 bytes long, got " ^ string_of_int cslen)
 
 let check_nbwritten = function
-  | n when n = packet_length -> R.ok ()
-  | n -> R.error (Incomplete_write n)
+  | n when n = packet_length -> return_unit
+  | n -> fail (Incomplete_write n)
 
 let check_nbread = function
-  | n when n = packet_length -> R.ok ()
-  | n -> R.error (Incomplete_read n)
+  | n when n = packet_length -> return_unit
+  | n -> fail (Incomplete_read n)
 
 let write_hidapi h ?len buf =
-  R.reword_error
-    (fun s -> Hidapi_error s)
-    (Hidapi.write h ?len Cstruct.(to_bigarray (sub buf 0 packet_length)))
+  Lwt_result.map_error
+    (fun err -> Hidapi_error err)
+    (Hidapi_lwt.write h ?len Cstruct.(to_bigarray (sub buf 0 packet_length)))
   >>= check_nbwritten
 
 let read_hidapi ?timeout h buf =
-  R.reword_error
-    (fun s -> Hidapi_error s)
-    (Hidapi.read ?timeout h buf packet_length)
+  Lwt_result.map_error
+    (fun err -> Hidapi_error err)
+    (Hidapi_lwt.read ?timeout h buf packet_length)
   >>= check_nbread
 
 let write_ping ?(buf = Cstruct.create packet_length) h =
@@ -154,7 +161,7 @@ let write_apdu ?pp ?(buf = Cstruct.create packet_length) h p =
 
   (* write following packets *)
   let rec inner apdu_p =
-    if apdu_p >= apdu_len then R.ok ()
+    if apdu_p >= apdu_len then return_unit
     else (
       memset buf 0 ;
       BE.set_uint16 buf 0 channel ;
@@ -185,39 +192,40 @@ let read ?pp ?(buf = Cstruct.create packet_length) h =
           Cstruct.hexdump_pp
           (Cstruct.sub buf 0 packet_length) ;
         Format.pp_print_flush pp ()) ;
-    apdu_error (Header.read buf) >>= fun (hdr, buf) ->
-    apdu_error (Header.check_seqnum hdr !expected_seq) >>= fun () ->
+    Lwt.return (apdu_error (Header.read buf)) >>= fun (hdr, buf) ->
+    Lwt.return (apdu_error (Header.check_seqnum hdr !expected_seq))
+    >>= fun () ->
     (if hdr.seq = 0 then (
-     (* first frame *)
-     let len = Cstruct.BE.get_uint16 buf 0 in
-     let cs = Cstruct.shift buf 2 in
-     payload := Cstruct.create len ;
-     full_payload := !payload ;
-     let nb_to_read = min len (packet_length - 7) in
-     Cstruct.blit cs 0 !payload 0 nb_to_read ;
-     payload := Cstruct.shift !payload nb_to_read ;
-     (* pos := !pos + nb_to_read ; *)
-     expected_seq := !expected_seq + 1)
-    else
-      (* next frames *)
-      (* let rem = Bytes.length !payload - !pos in *)
-      let nb_to_read = min (Cstruct.length !payload) (packet_length - 5) in
-      Cstruct.blit buf 0 !payload 0 nb_to_read ;
-      payload := Cstruct.shift !payload nb_to_read ;
-      (* pos := !pos + nb_to_read ; *)
-      expected_seq := !expected_seq + 1) ;
+       (* first frame *)
+       let len = Cstruct.BE.get_uint16 buf 0 in
+       let cs = Cstruct.shift buf 2 in
+       payload := Cstruct.create len ;
+       full_payload := !payload ;
+       let nb_to_read = min len (packet_length - 7) in
+       Cstruct.blit cs 0 !payload 0 nb_to_read ;
+       payload := Cstruct.shift !payload nb_to_read ;
+       (* pos := !pos + nb_to_read ; *)
+       expected_seq := !expected_seq + 1)
+     else
+       (* next frames *)
+       (* let rem = Bytes.length !payload - !pos in *)
+       let nb_to_read = min (Cstruct.length !payload) (packet_length - 5) in
+       Cstruct.blit buf 0 !payload 0 nb_to_read ;
+       payload := Cstruct.shift !payload nb_to_read ;
+       (* pos := !pos + nb_to_read ; *)
+       expected_seq := !expected_seq + 1) ;
     match (Cstruct.length !payload, hdr.cmd) with
-    | 0, Ping -> R.ok (Status.Ok, Cstruct.create 0)
+    | 0, Ping -> return (Status.Ok, Cstruct.create 0)
     | 0, Apdu ->
         (* let sw_pos = Bytes.length !payload - 2 in *)
         let payload_len = Cstruct.length !full_payload in
         let sw = Cstruct.BE.get_uint16 !full_payload (payload_len - 2) in
-        R.ok (Status.of_int sw, Cstruct.sub !full_payload 0 (payload_len - 2))
+        return (Status.of_int sw, Cstruct.sub !full_payload 0 (payload_len - 2))
     | _ -> inner ()
   in
   inner ()
 
-let ping ?pp ?buf h = write_ping ?buf h >>= fun () -> read ?pp ?buf h >>| ignore
+let ping ?pp ?buf h = write_ping ?buf h >>= fun () -> read ?pp ?buf h >|= ignore
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

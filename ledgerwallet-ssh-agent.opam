@@ -14,7 +14,7 @@ depends: [
   "dune" {>= "2.4.0"}
   "ledgerwallet"
   "hex" { with-test }
-  "alcotest" { with-test }
+  "alcotest-lwt" { with-test }
 ]
 synopsis: "Ledger wallet library for OCaml: SSH agent app"
 description: """

@@ -3,7 +3,8 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
-open Rresult
+open Lwt_result
+open Lwt_result.Infix
 open Ledgerwallet
 
 module Version = struct
@@ -38,11 +39,12 @@ module Version = struct
       let major = Cstruct.get_uint8 cs 1 in
       let minor = Cstruct.get_uint8 cs 2 in
       let patch = Cstruct.get_uint8 cs 3 in
-      R.ok (create ~app_class ~major ~minor ~patch)
+      return (create ~app_class ~major ~minor ~patch)
     with _ ->
-      Transport.app_error
-        ~msg:"Version.read"
-        (R.error Tezos_impossible_to_read_version)
+      Lwt.return
+        (Transport.app_error
+           ~msg:"Version.read"
+           (Error Tezos_impossible_to_read_version))
 end
 
 type ins =
@@ -153,7 +155,7 @@ let get_version ?pp ?buf h =
 
 let get_git_commit ?pp ?buf h =
   let apdu = Apdu.create (wrap_ins Git_commit) in
-  Transport.apdu ~msg:"get_git_commit" ?pp ?buf h apdu >>| Cstruct.to_string
+  Transport.apdu ~msg:"get_git_commit" ?pp ?buf h apdu >|= Cstruct.to_string
 
 let read_path_with_length buf =
   let length = Cstruct.get_uint8 buf 0 in
@@ -165,7 +167,7 @@ let read_path_with_length buf =
 
 let get_authorized_key ?pp ?buf h =
   let apdu = Apdu.create (wrap_ins Get_authorized_key) in
-  Transport.apdu ~msg:"get_authorized_key" ?pp ?buf h apdu >>| fun path ->
+  Transport.apdu ~msg:"get_authorized_key" ?pp ?buf h apdu >|= fun path ->
   read_path_with_length path
 
 let get_authorized_path_and_curve ?pp ?buf h =
@@ -175,12 +177,13 @@ let get_authorized_path_and_curve ?pp ?buf h =
   let curve_code = Cstruct.get_uint8 payload 0 in
   match curve_of_int curve_code with
   | None ->
-      Transport.app_error
-        ~msg:"get_authorized_path_and_curve"
-        (R.error (Tezos_invalid_curve_code curve_code))
+      Lwt.return
+        (Transport.app_error
+           ~msg:"get_authorized_path_and_curve"
+           (Error (Tezos_invalid_curve_code curve_code)))
   | Some curve ->
       let path_components = read_path_with_length (Cstruct.shift payload 1) in
-      R.ok (path_components, curve)
+      return (path_components, curve)
 
 let write_path cs path =
   ListLabels.fold_left path ~init:cs ~f:(fun cs i ->
@@ -199,7 +202,7 @@ let get_public_key_like cmd ?pp ?buf h curve path =
   let apdu =
     Apdu.create ~p2:(int_of_curve curve) ~lc ~data:data_init (wrap_ins cmd)
   in
-  Transport.apdu ~msg ?pp ?buf h apdu >>| fun addr ->
+  Transport.apdu ~msg ?pp ?buf h apdu >|= fun addr ->
   let keylen = Cstruct.get_uint8 addr 0 in
   Cstruct.sub addr 1 keylen
 
@@ -236,17 +239,17 @@ let setup_baking ?pp ?buf h ~main_chain_id ~main_hwm ~test_hwm curve path =
   let apdu =
     Apdu.create ~p2:(int_of_curve curve) ~lc ~data:data_init (wrap_ins Setup)
   in
-  Transport.apdu ~msg ?pp ?buf h apdu >>| fun addr ->
+  Transport.apdu ~msg ?pp ?buf h apdu >|= fun addr ->
   let keylen = Cstruct.get_uint8 addr 0 in
   Cstruct.sub addr 1 keylen
 
 let deauthorize_baking ?pp ?buf h =
   let apdu = Apdu.create (wrap_ins Deauthorize_baking) in
-  Transport.apdu ~msg:"deauthorize_baking" ?pp ?buf h apdu >>| fun _ -> ()
+  Transport.apdu ~msg:"deauthorize_baking" ?pp ?buf h apdu >|= fun _ -> ()
 
 let get_high_watermark ?pp ?buf h =
   let apdu = Apdu.create (wrap_ins Query_high_watermark) in
-  Transport.apdu ~msg:"get_high_watermark" ?pp ?buf h apdu >>| fun data ->
+  Transport.apdu ~msg:"get_high_watermark" ?pp ?buf h apdu >|= fun data ->
   let has_migrated_to_tenderbake = Cstruct.length data >= 8 in
   if has_migrated_to_tenderbake then
     (Cstruct.BE.get_uint32 data 0, Some (Cstruct.BE.get_uint32 data 4))
@@ -254,7 +257,7 @@ let get_high_watermark ?pp ?buf h =
 
 let get_all_high_watermarks ?pp ?buf h =
   let apdu = Apdu.create (wrap_ins Query_all_high_watermarks) in
-  Transport.apdu ~msg:"get_high_watermark" ?pp ?buf h apdu >>| fun data ->
+  Transport.apdu ~msg:"get_high_watermark" ?pp ?buf h apdu >|= fun data ->
   let has_migrated_to_tenderbake = Cstruct.length data >= 20 in
   if has_migrated_to_tenderbake then
     let main_hwm = Cstruct.BE.get_uint32 data 0 in
@@ -275,7 +278,7 @@ let set_high_watermark ?pp ?buf h hwm =
   let data = Cstruct.create 4 in
   Cstruct.BE.set_uint32 data 0 hwm ;
   let apdu = Apdu.create ~lc:4 ~data (wrap_ins Reset_high_watermark) in
-  Transport.apdu ~msg:"set_high_watermark" ?pp ?buf h apdu >>| ignore
+  Transport.apdu ~msg:"set_high_watermark" ?pp ?buf h apdu >|= ignore
 
 let sign ?pp ?buf ?(hash_on_ledger = true) h curve path payload =
   let nb_derivations = List.length path in
@@ -306,8 +309,10 @@ let get_deterministic_nonce ?pp ?buf h curve path payload =
   let cmd = wrap_ins Make_deterministic_nonce in
   let lc = Cstruct.length data in
   if lc >= Apdu.max_data_length then
-    Transport.app_error ~msg:"get_deterministic_nonce"
-    @@ R.error (Payload_too_big (Cstruct.length payload))
+    Lwt.return
+      (Transport.app_error
+         ~msg:"get_deterministic_nonce"
+         (Error (Payload_too_big (Cstruct.length payload))))
   else
     let apdu = Apdu.create ~p2:(int_of_curve curve) ~lc ~data cmd in
     let msg = "make-deterministic-nonce" in
@@ -328,7 +333,7 @@ let sign_and_hash ?pp ?buf h curve path payload =
   Transport.write_payload ~mark_last:true ?pp ?buf ~msg ~cmd h ~p1:0x01 payload
   >>= fun bytes ->
   let hash, signature = Cstruct.split bytes 32 in
-  R.return (hash, signature)
+  return (hash, signature)
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

@@ -4,15 +4,19 @@
   ---------------------------------------------------------------------------*)
 
 open Rresult
+open Lwt_result
+open Lwt_result.Infix
+open Lwt.Syntax
 
-type t = Hidapi of Hidapi.t | Proxy of Transport_proxy.t
+let return_unit = Lwt.return_ok ()
 
-type hidapi_path = Hidapi.device_info
+type t = Hidapi of Hidapi_lwt.t | Proxy of Transport_proxy.t
+
+type hidapi_path = Hidapi_lwt.device_info
+
 type proxy_path = {addr : string option; port : int option}
 
-type path =
-  | Hidapi_path of hidapi_path
-  | Proxy_path of proxy_path
+type path = Hidapi_path of hidapi_path | Proxy_path of proxy_path
 
 type transport_error =
   | HidapiError of Transport_hidapi.error
@@ -50,13 +54,14 @@ let enumerate_hidapi () =
   let all_product_ids =
     nano_s_product_ids @ nano_x_product_ids @ nano_s_plus_product_ids
   in
-  let open Hidapi in
+  let open Hidapi_lwt in
+  let+ infos = enumerate ~vendor_id () in
   List.filter_map
     (fun hid ->
       if List.exists (fun (v : int) -> v = hid.product_id) all_product_ids then
         Some (Hidapi_path hid)
       else None)
-    (enumerate ~vendor_id ())
+    infos
 
 let enumerate_proxy () =
   let addr = Sys.getenv_opt "LEDGER_PROXY_ADDRESS" in
@@ -66,67 +71,77 @@ let enumerate_proxy () =
   in
   match (addr, port) with None, None -> [] | _ -> [Proxy_path {addr; port}]
 
-let enumerate () = enumerate_proxy () @ enumerate_hidapi ()
+let enumerate () =
+  let+ hidapi_infos = enumerate_hidapi () in
+  enumerate_proxy () @ hidapi_infos
 
 let open_id ~vendor_id ~product_id =
-  Option.map (fun o -> Hidapi o) (Hidapi.open_id ~vendor_id ~product_id)
+  let* o = Hidapi_lwt.open_id ~vendor_id ~product_id in
+  Lwt.return (Option.map (fun o -> Hidapi o) o)
 
 let open_path (path : path) =
   match path with
   | Hidapi_path device_info ->
-      Option.map (fun o -> Hidapi o) (Hidapi.open_path device_info.Hidapi.path)
+      let* o = Hidapi_lwt.open_path device_info.Hidapi_lwt.path in
+      Lwt.return (Option.map (fun o -> Hidapi o) o)
   | Proxy_path {addr; port} ->
-      Some (Proxy (Transport_proxy.create ?name:addr ?port ()))
+      Lwt.return_some (Proxy (Transport_proxy.create ?name:addr ?port ()))
 
 let close = function
-  | Hidapi h -> Hidapi.close h
-  | Proxy p -> Transport_proxy.close p
+  | Hidapi h -> Hidapi_lwt.close h
+  | Proxy p -> Lwt.return (Transport_proxy.close p)
 
 let with_connection f = function
-  | Some h -> (
-      try
-        let out = f h in
-        close h ;
-        Some out
-      with exn ->
-        close h ;
-        raise exn)
-  | None -> None
+  | Some h ->
+      Lwt.catch
+        (fun () ->
+          let* out = f h in
+          let* () = close h in
+          Lwt.return_some out)
+        (fun exn ->
+          let* () = close h in
+          Lwt.fail exn)
+  | None -> Lwt.return_none
 
 let with_connection_id ~vendor_id ~product_id f =
-  with_connection f (open_id ~vendor_id ~product_id)
+  let* device = open_id ~vendor_id ~product_id in
+  with_connection f device
 
-let with_connection_path path f = with_connection f (open_path path)
+let with_connection_path path f =
+  let* device = open_path path in
+  with_connection f device
 
 let write_apdu ?pp ?buf h apdu =
   match h with
   | Hidapi h ->
-      R.reword_error
-        (fun e -> TransportError (HidapiError e))
-        (Transport_hidapi.write_apdu ?pp ?buf h apdu)
+      let* result = Transport_hidapi.write_apdu ?pp ?buf h apdu in
+      Lwt.return
+        (R.reword_error (fun e -> TransportError (HidapiError e)) result)
   | Proxy p ->
-      R.reword_error
-        (fun e -> TransportError (ProxyError e))
-        (Transport_proxy.write_apdu ?pp p apdu)
+      Lwt.return
+        (R.reword_error
+           (fun e -> TransportError (ProxyError e))
+           (Transport_proxy.write_apdu ?pp p apdu))
 
 let read ?pp ?buf h =
   match h with
   | Hidapi h ->
-      R.reword_error
+      map_error
         (fun e -> TransportError (HidapiError e))
         (Transport_hidapi.read ?pp ?buf h)
   | Proxy p ->
-      R.reword_error
-        (fun e -> TransportError (ProxyError e))
-        (Transport_proxy.read p)
+      Lwt.return
+        (R.reword_error
+           (fun e -> TransportError (ProxyError e))
+           (Transport_proxy.read p))
 
 let ping ?pp ?buf h =
   match h with
   | Hidapi h ->
-      R.reword_error
+      map_error
         (fun e -> TransportError (HidapiError e))
         (Transport_hidapi.ping ?pp ?buf h)
-  | Proxy _ -> Ok ()
+  | Proxy _ -> return_unit
 
 let apdu ?pp ?(msg = "") ?buf h apdu =
   write_apdu ?pp ?buf h apdu >>= fun () ->
@@ -143,8 +158,8 @@ let apdu ?pp ?(msg = "") ?buf h apdu =
         payload ;
       Format.pp_print_flush pp ()) ;
   match status with
-  | Status.Ok -> R.ok payload
-  | status -> app_error ~msg (R.error status)
+  | Status.Ok -> return payload
+  | status -> Lwt.return (app_error ~msg (R.error status))
 
 let write_payload ?pp ?(msg = "write_payload") ?buf ?(mark_last = false) ~cmd
     ?p1 ?p2 h cs =
@@ -165,9 +180,9 @@ let write_payload ?pp ?(msg = "write_payload") ?buf ?(mark_last = false) ~cmd
       h
       Apdu.(create ?p1 ?p2 ~lc ~data:(Cstruct.sub cs 0 lc) cmd)
     >>= fun response ->
-    if last then R.ok response else inner (Cstruct.shift cs lc)
+    if last then return response else inner (Cstruct.shift cs lc)
   in
-  if Cstruct.length cs = 0 then R.ok cs else inner cs
+  if Cstruct.length cs = 0 then return cs else inner cs
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

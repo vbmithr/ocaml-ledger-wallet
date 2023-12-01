@@ -1,26 +1,32 @@
-open Rresult
 open Ledgerwallet_tezos
+open Lwt_result.Infix
+
+let return_unit = Lwt.return_ok ()
 
 let vendor_id = 0x2C97
 
 let product_id = 0x0001
 
-let fail_on_error = function
-  | None -> Alcotest.fail "Found no ledger."
-  | Some (Result.Ok ()) -> ()
-  | Some (Result.Error e) ->
-      Alcotest.fail
-        (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
+let fail_on_error x =
+  Lwt.bind x (function
+      | None -> Alcotest.fail "Found no ledger."
+      | Some (Ok ()) -> Lwt.return_unit
+      | Some (Error e) ->
+          Alcotest.fail
+            (Format.asprintf
+               "Ledger error: %a"
+               Ledgerwallet.Transport.pp_error
+               e))
 
 let with_connection f =
   fail_on_error
     (Ledgerwallet.Transport.with_connection_id ~vendor_id ~product_id f)
 
-let test_open_close () = with_connection (fun _ -> R.ok ())
+let test_open_close () = with_connection (fun _ -> return_unit)
 
 let test_ping () = with_connection Ledgerwallet.Transport.ping
 
-let test_git_commit () = with_connection (fun h -> get_git_commit h >>| ignore)
+let test_git_commit () = with_connection (fun h -> get_git_commit h >|= ignore)
 
 let hard x = Int32.logor x 0x8000_0000l
 
@@ -33,12 +39,12 @@ let msg = Cstruct.of_string "Voulez-vous coucher avec moi, ce soir ?"
 let msg_ba = Cstruct.to_bigarray msg
 
 let test_getpk h curve =
-  get_public_key h curve path >>| fun pk ->
+  get_public_key h curve path >|= fun pk ->
   Alcotest.(
     check int "pklen" (if curve = Ed25519 then 33 else 65) (Cstruct.length pk))
 
 let test_getpk () =
-  List.iter (fun x -> with_connection (fun h -> test_getpk h x)) curves
+  Lwt_list.iter_s (fun x -> with_connection (fun h -> test_getpk h x)) curves
 
 let secp256k1_ctx =
   Secp256k1.Context.create [Secp256k1.Context.Verify; Secp256k1.Context.Sign]
@@ -48,7 +54,7 @@ let test_sign h curve =
   (* Add the watermark Generic_operation to the message *)
   let msg = Cstruct.concat [Cstruct.of_string "\x03"; msg] in
   get_public_key ~pp:Format.err_formatter h curve path >>= fun pk ->
-  sign ~pp:Format.err_formatter h curve path msg >>| fun signature ->
+  sign ~pp:Format.err_formatter h curve path msg >|= fun signature ->
   match curve with
   | Bip32_ed25519 -> ()
   | Ed25519 ->
@@ -57,6 +63,7 @@ let test_sign h curve =
         check bool "sign Ed25519" true
           (Tweetnacl.Sign.verify_detached ~key:pk ~signature msg)*)
   | Secp256k1 -> (
+      let open Rresult in
       let out =
         Secp256k1.Key.read_pk secp256k1_ctx (Cstruct.to_bigarray pk)
         >>= fun pk ->
@@ -69,7 +76,7 @@ let test_sign h curve =
       in
       match out with
       | Ok b -> check bool "sign Secp256k1" true b
-      | Error e -> fail e)
+      | Error e -> Alcotest.fail e)
   | Secp256r1 -> (
       let pk = Cstruct.to_bytes pk in
       let signature = Cstruct.to_bytes signature in
@@ -100,4 +107,4 @@ let basic =
     ("sign", `Quick, test_sign);
   ]
 
-let () = Alcotest.run "ledgerwallet.tezos" [("basic", basic)]
+let () = Lwt_main.run (Alcotest_lwt.run "ledgerwallet.tezos" [("basic", basic)])

@@ -15,7 +15,7 @@ depends: [
   "hex" {>= "1.4.0"}
   "bech32"
   "ledgerwallet"
-  "alcotest" { with-test }
+  "alcotest-lwt" { with-test }
 ]
 synopsis: "Ledger wallet library for OCaml: Zilliqa app"
 description:"""

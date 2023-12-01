@@ -16,7 +16,7 @@ depends: [
   "uecc" { with-test }
   "hex" { with-test }
   "secp256k1" # { with-test } # commented because github actions does not install external deps for test only deps
-  "alcotest" { with-test }
+  "alcotest-lwt" { with-test }
 ]
 synopsis: "Ledger wallet library for OCaml: Tezos app"
 description:"""

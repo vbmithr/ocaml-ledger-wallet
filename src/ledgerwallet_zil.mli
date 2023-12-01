@@ -7,7 +7,7 @@ val get_version :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (int * int * int, Ledgerwallet.Transport.error) result
+  (int * int * int, Ledgerwallet.Transport.error) result Lwt.t
 
 val get_pk :
   ?display_addr:bool ->
@@ -16,6 +16,7 @@ val get_pk :
   Ledgerwallet.Transport.t ->
   int32 ->
   (Cstruct.t * [`Zil] Bech32.Segwit.t, Ledgerwallet.Transport.error) result
+  Lwt.t
 
 (** data must be a 32 bytes-len hash. *)
 val sign_hash :
@@ -24,7 +25,7 @@ val sign_hash :
   Ledgerwallet.Transport.t ->
   int32 ->
   Cstruct.t ->
-  (Cstruct.t, Ledgerwallet.Transport.error) result
+  (Cstruct.t, Ledgerwallet.Transport.error) result Lwt.t
 
 (** data can be arbitrary len. *)
 val sign_txn :
@@ -33,7 +34,7 @@ val sign_txn :
   Ledgerwallet.Transport.t ->
   int32 ->
   Cstruct.t ->
-  (Cstruct.t, Ledgerwallet.Transport.error) result
+  (Cstruct.t, Ledgerwallet.Transport.error) result Lwt.t
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2019 Vincent Bernardoff

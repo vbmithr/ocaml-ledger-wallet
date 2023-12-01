@@ -3,7 +3,7 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
-open Rresult
+open Lwt_result.Infix
 open Ledgerwallet
 
 type ins =
@@ -45,7 +45,7 @@ let get_public_key ?pp ?buf ~curve ~path h =
     ?buf
     h
     Apdu.(create ~lc ~p2 ~data:data_init (wrap_ins Get_public_key))
-  >>| fun addr ->
+  >|= fun addr ->
   let keylen = Cstruct.get_uint8 addr 0 in
   Cstruct.sub addr 1 keylen
 

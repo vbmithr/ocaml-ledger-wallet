@@ -15,26 +15,30 @@ type proxy_path
 
 type path = Hidapi_path of Hidapi.device_info | Proxy_path of proxy_path
 
-val enumerate : unit -> path list
+val enumerate : unit -> path list Lwt.t
 
 val app_error : msg:string -> ('a, Status.t) result -> ('a, error) result
 
 val pp_error : Format.formatter -> error -> unit
 
-val open_id : vendor_id:int -> product_id:int -> t option
+val open_id : vendor_id:int -> product_id:int -> t option Lwt.t
 
-val open_path : path -> t option
+val open_path : path -> t option Lwt.t
 
-val close : t -> unit
+val close : t -> unit Lwt.t
 
 val with_connection_id :
-  vendor_id:int -> product_id:int -> (t -> 'a) -> 'a option
+  vendor_id:int -> product_id:int -> (t -> 'a Lwt.t) -> 'a option Lwt.t
 
-val with_connection_path : path -> (t -> 'a) -> 'a option
+val with_connection_path : path -> (t -> 'a Lwt.t) -> 'a option Lwt.t
 
 (** [write_apdu ?pp ?buf ledger apdu] writes [apdu] to [ledger]. *)
 val write_apdu :
-  ?pp:Format.formatter -> ?buf:Cstruct.t -> t -> Apdu.t -> (unit, error) result
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  t ->
+  Apdu.t ->
+  (unit, error) result Lwt.t
 
 (** [read ?pp ?buf ledger] reads from [ledger] a status response and a
     payload. *)
@@ -42,11 +46,12 @@ val read :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   t ->
-  (Status.t * Cstruct.t, error) result
+  (Status.t * Cstruct.t, error) result Lwt.t
 
 (** [ping ?pp ?buf ledger] writes a ping packet to [ledger],
     optionally containing [buf]. *)
-val ping : ?pp:Format.formatter -> ?buf:Cstruct.t -> t -> (unit, error) result
+val ping :
+  ?pp:Format.formatter -> ?buf:Cstruct.t -> t -> (unit, error) result Lwt.t
 
 (** [apdu ?pp ?msg ?buf ledger apdu] writes [apdu] to [ledger] and
     returns the response. *)
@@ -56,7 +61,7 @@ val apdu :
   ?buf:Cstruct.t ->
   t ->
   Apdu.t ->
-  (Cstruct.t, error) result
+  (Cstruct.t, error) result Lwt.t
 
 (** [write_payload ?pp ?msg ?buf ?mark_last ~cmd ?p1 ?p2 ledger
     payload] writes the [payload] of [cmd] into [ledger] and returns
@@ -71,7 +76,7 @@ val write_payload :
   ?p2:int ->
   t ->
   Cstruct.t ->
-  (Cstruct.t, error) result
+  (Cstruct.t, error) result Lwt.t
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

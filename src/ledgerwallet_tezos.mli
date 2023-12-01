@@ -31,7 +31,7 @@ val get_version :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (Version.t, Transport.error) result
+  (Version.t, Transport.error) result Lwt.t
 
 (** [get_git_commit ?pp ?buf ledger] is the git commit information of
     the Ledger app running at [ledger]. *)
@@ -39,7 +39,7 @@ val get_git_commit :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (string, Transport.error) result
+  (string, Transport.error) result Lwt.t
 
 (** [get_authorized_key ?pp ?buf ledger] is the BIP32 path of the key
     authorized to bake on the Ledger app running at [ledger]. *)
@@ -47,7 +47,7 @@ val get_authorized_key :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (int32 list, Transport.error) result
+  (int32 list, Transport.error) result Lwt.t
 
 (** [get_authorized_path_and_curve ?pp ?buf ledger] is the BIP32 path
     and the curve code of the key authorized to bake on the Ledger app
@@ -56,7 +56,7 @@ val get_authorized_path_and_curve :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (int32 list * curve, Transport.error) result
+  (int32 list * curve, Transport.error) result Lwt.t
 
 (** [get_public_key ?pp ?buf ?prompt ledger curve path] is [0x02 ||
     pk] from [ledger] at [path] for curve [curve]. If [prompt] is
@@ -69,7 +69,7 @@ val get_public_key :
   Ledgerwallet.Transport.t ->
   curve ->
   int32 list ->
-  (Cstruct.t, Transport.error) result
+  (Cstruct.t, Transport.error) result Lwt.t
 
 (** [authorize_baking ?pp ?buf ?prompt ledger curve path] is like
     [get_public_key] with [prompt = true], but only works with the
@@ -83,7 +83,7 @@ val authorize_baking :
   Ledgerwallet.Transport.t ->
   curve ->
   int32 list ->
-  (Cstruct.t, Transport.error) result
+  (Cstruct.t, Transport.error) result Lwt.t
 
 (** [setup_baking ?pp ?buf ?prompt ledger ~main_chain_id ~main_hwm ~test_hwm curve path]
     sets up the Ledger's Baking application: it informs
@@ -100,7 +100,7 @@ val setup_baking :
   test_hwm:int32 ->
   curve ->
   int32 list ->
-  (Cstruct.t, Transport.error) result
+  (Cstruct.t, Transport.error) result Lwt.t
 
 (** [deauthorize_baking ?pp ?buf ledger]
     deauthorizes the Ledger's Baking application from baking for any address. *)
@@ -108,7 +108,7 @@ val deauthorize_baking :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (unit, Transport.error) result
+  (unit, Transport.error) result Lwt.t
 
 (** [get_high_watermark ?pp ?buf ledger] is the current value of the
     high water mark for the main-chain on [ledger]. This works with
@@ -118,7 +118,7 @@ val get_high_watermark :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (int32 * int32 option, Transport.error) result
+  (int32 * int32 option, Transport.error) result Lwt.t
 
 (** Query the high water marks for the main and test chains, as well as the ID
     of the main-chain (string of length 4) recorded by the Ledger Baking app. *)
@@ -131,6 +131,7 @@ val get_all_high_watermarks :
     * [`Chain_id of string],
     Transport.error )
   result
+  Lwt.t
 
 (** [set_high_watermark ?pp ?buf ledger hwm] reset the high water
     mark on [ledger] to [hwm] for the main-chain.
@@ -141,7 +142,7 @@ val set_high_watermark :
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
   int32 ->
-  (unit, Transport.error) result
+  (unit, Transport.error) result Lwt.t
 
 (** [sign ?pp ?buf ?hash_on_ledger h curve path payload] is the
     signature of [payload] (or its hash if [hash_on_ledger] is [true],
@@ -155,7 +156,7 @@ val sign :
   curve ->
   int32 list ->
   Cstruct.t ->
-  (Cstruct.t, Transport.error) result
+  (Cstruct.t, Transport.error) result Lwt.t
 
 (** [get_deterministic_nonce ?pp ?buf h curve path payload] asks the ledger
     for a deterministic nonce from a some given bytes (using HMAC).
@@ -167,7 +168,7 @@ val get_deterministic_nonce :
   curve ->
   int32 list ->
   Cstruct.t ->
-  (Cstruct.t, Transport.error) result
+  (Cstruct.t, Transport.error) result Lwt.t
 
 (** [sign ?pp ?buf ?hash_on_ledger h curve path payload] is the
     signature of [payload] (or its hash if [hash_on_ledger] is [true],
@@ -180,7 +181,7 @@ val sign_and_hash :
   curve ->
   int32 list ->
   Cstruct.t ->
-  (Cstruct.t * Cstruct.t, Transport.error) result
+  (Cstruct.t * Cstruct.t, Transport.error) result Lwt.t
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

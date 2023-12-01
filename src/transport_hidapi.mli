@@ -13,7 +13,7 @@ val write_apdu :
   ?buf:Cstruct.t ->
   Hidapi.t ->
   Apdu.t ->
-  (unit, error) result
+  (unit, error) result Lwt.t
 
 (** [read ?pp ?buf ledger] reads from [ledger] a status response and a
     payload. *)
@@ -21,12 +21,15 @@ val read :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Hidapi.t ->
-  (Status.t * Cstruct.t, error) result
+  (Status.t * Cstruct.t, error) result Lwt.t
 
 (** [ping ?pp ?buf ledger] writes a ping packet to [ledger],
     optionally containing [buf]. *)
 val ping :
-  ?pp:Format.formatter -> ?buf:Cstruct.t -> Hidapi.t -> (unit, error) result
+  ?pp:Format.formatter ->
+  ?buf:Cstruct.t ->
+  Hidapi.t ->
+  (unit, error) result Lwt.t
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

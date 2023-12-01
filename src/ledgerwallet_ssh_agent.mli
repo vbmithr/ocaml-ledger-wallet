@@ -13,7 +13,7 @@ val get_public_key :
   curve:curve ->
   path:int32 list ->
   Ledgerwallet.Transport.t ->
-  (Cstruct.t, Ledgerwallet.Transport.error) result
+  (Cstruct.t, Ledgerwallet.Transport.error) result Lwt.t
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

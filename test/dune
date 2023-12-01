@@ -8,16 +8,16 @@
  (name test_tezos)
  (modules Test_tezos)
  (package ledgerwallet-tezos)
- (libraries alcotest ledgerwallet-tezos secp256k1 uecc))
+ (libraries alcotest-lwt ledgerwallet-tezos secp256k1 uecc))
 
 (test
  (name test_zil)
  (modules Test_zil)
  (package ledgerwallet-zil)
- (libraries hex alcotest ledgerwallet-zil))
+ (libraries hex alcotest-lwt ledgerwallet-zil))
 
 (test
  (name test_ssh_agent)
  (modules Test_ssh_agent)
  (package ledgerwallet-ssh-agent)
- (libraries hex alcotest ledgerwallet-ssh-agent))
+ (libraries hex alcotest-lwt ledgerwallet-ssh-agent))
