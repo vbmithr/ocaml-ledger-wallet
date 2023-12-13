@@ -261,14 +261,14 @@ let get_all_high_watermarks ?pp ?buf h =
     let main_hwm_round = Cstruct.BE.get_uint32 data 4 in
     let test_hwm = Cstruct.BE.get_uint32 data 8 in
     let test_hwm_round = Cstruct.BE.get_uint32 data 12 in
-    let chain_id = Cstruct.copy data 16 4 in
+    let chain_id = Cstruct.to_string data ~off:16 ~len:4 in
     ( `Main_hwm (main_hwm, Some main_hwm_round),
       `Test_hwm (test_hwm, Some test_hwm_round),
       `Chain_id chain_id )
   else
     let main_hwm = Cstruct.BE.get_uint32 data 0 in
     let test_hwm = Cstruct.BE.get_uint32 data 4 in
-    let chain_id = Cstruct.copy data 8 4 in
+    let chain_id = Cstruct.to_string data ~off:8 ~len:4 in
     (`Main_hwm (main_hwm, None), `Test_hwm (test_hwm, None), `Chain_id chain_id)
 
 let set_high_watermark ?pp ?buf h hwm =
