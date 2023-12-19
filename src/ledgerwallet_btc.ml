@@ -548,7 +548,7 @@ let sign ?pp ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
         tx
         i
       >>= fun () ->
-      let _ret = hash_tx_finalize_full ?pp ?buf h tx in
+      hash_tx_finalize_full ?pp ?buf h tx >>= fun _ret ->
       hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags:[] h tx
       >|= fun signature -> (succ i, signature :: acc))
   >|= snd
@@ -573,7 +573,7 @@ let sign_segwit ?pp ?(bch = false) ?buf ~path ~prev_amounts h
     tx
     0
   >>= fun () ->
-  let _pin_required = hash_tx_finalize_full ?pp ?buf h tx in
+  hash_tx_finalize_full ?pp ?buf h tx >>= fun _pin_required ->
   ListLabels.fold_right2
     (Array.to_list tx.inputs)
     prev_amounts

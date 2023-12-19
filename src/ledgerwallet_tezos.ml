@@ -291,7 +291,7 @@ let sign ?pp ?buf ?(hash_on_ledger = true) h curve path payload =
   let cmd = wrap_ins (if hash_on_ledger then Sign else Sign_unsafe) in
   let msg = "sign" in
   let apdu = Apdu.create ~p2:(int_of_curve curve) ~lc ~data:data_init cmd in
-  let _addr = Transport.apdu ~msg ?pp ?buf h apdu in
+  Transport.apdu ~msg ?pp ?buf h apdu >>= fun _addr ->
   Transport.write_payload ~mark_last:true ?pp ?buf ~msg ~cmd h ~p1:0x01 payload
 
 let get_deterministic_nonce ?pp ?buf h curve path payload =
@@ -329,7 +329,7 @@ let sign_and_hash ?pp ?buf h curve path payload =
   let cmd = wrap_ins Sign_with_hash in
   let msg = "sign-with-hash" in
   let apdu = Apdu.create ~p2:(int_of_curve curve) ~lc ~data:data_init cmd in
-  let _addr = Transport.apdu ~msg ?pp ?buf h apdu in
+  Transport.apdu ~msg ?pp ?buf h apdu >>= fun _apdu ->
   Transport.write_payload ~mark_last:true ?pp ?buf ~msg ~cmd h ~p1:0x01 payload
   >>= fun bytes ->
   let hash, signature = Cstruct.split bytes 32 in
