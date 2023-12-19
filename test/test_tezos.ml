@@ -36,8 +36,6 @@ let curves = [Ed25519; Secp256k1; Secp256r1]
 
 let msg = Cstruct.of_string "Voulez-vous coucher avec moi, ce soir ?"
 
-let msg_ba = Cstruct.to_bigarray msg
-
 let test_getpk h curve =
   get_public_key h curve path >|= fun pk ->
   Alcotest.(
@@ -52,9 +50,11 @@ let secp256k1_ctx =
 let test_sign h curve =
   let open Alcotest in
   (* Add the watermark Generic_operation to the message *)
-  let msg = Cstruct.concat [Cstruct.of_string "\x03"; msg] in
-  get_public_key ~pp:Format.err_formatter h curve path >>= fun pk ->
-  sign ~pp:Format.err_formatter h curve path msg >|= fun signature ->
+  let msg = Cstruct.concat [Cstruct.of_string "\x05"; msg] in
+  get_public_key ~prompt:false ~pp:Format.err_formatter h curve path
+  >>= fun pk ->
+  sign_and_hash ~pp:Format.err_formatter h curve path msg
+  >|= fun (hash, signature) ->
   match curve with
   | Bip32_ed25519 -> ()
   | Ed25519 ->
@@ -71,7 +71,7 @@ let test_sign h curve =
         Cstruct.(set_uint8 signature 0 (get_uint8 signature 0 land 0xfe)) ;
         Secp256k1.Sign.read_der secp256k1_ctx (Cstruct.to_bigarray signature)
         >>= fun signature ->
-        let msg = Secp256k1.Sign.msg_of_bytes_exn msg_ba in
+        let msg = Secp256k1.Sign.msg_of_bytes_exn (Cstruct.to_bigarray hash) in
         Secp256k1.Sign.verify secp256k1_ctx ~pk ~msg ~signature
       in
       match out with
@@ -79,16 +79,16 @@ let test_sign h curve =
       | Error e -> Alcotest.fail e)
   | Secp256r1 -> (
       let pk = Cstruct.to_bytes pk in
-      let signature = Cstruct.to_bytes signature in
-      let msg = Cstruct.to_bytes msg in
-      (*(* Remove parity info *)
-        Cstruct.(set_uint8 signature 0 (get_uint8 signature 0 land 0xfe)) ;
-        let signature =
-          Secp256k1.Sign.read_der_exn
-            secp256k1_ctx (Cstruct.to_bigarray signature) in
-        let signature =
-          Secp256k1.Sign.to_bytes
-            secp256k1_ctx signature in*)
+      let msg = Cstruct.to_bytes hash in
+      (* Remove parity info *)
+      Cstruct.(set_uint8 signature 0 (get_uint8 signature 0 land 0xfe)) ;
+      let signature =
+        Secp256k1.Sign.read_der_exn
+          secp256k1_ctx
+          (Cstruct.to_bigarray signature)
+      in
+      let signature = Secp256k1.Sign.to_bytes secp256k1_ctx signature in
+      let signature = Bigstring.to_bytes signature in
       match Uecc.(pk_of_bytes pk) with
       | None -> assert false
       | Some pk ->
@@ -96,7 +96,7 @@ let test_sign h curve =
 
 let test_sign () =
   with_connection (fun h ->
-      test_sign h Secp256r1 >>= fun () -> test_sign h Secp256r1)
+      test_sign h Secp256k1 >>= fun () -> test_sign h Secp256r1)
 
 let basic =
   [
