@@ -38,8 +38,11 @@ let fail_on_error x =
       | None -> Alcotest.fail "Found no ledger."
       | Some (Result.Ok ()) -> Lwt.return_unit
       | Some (Result.Error e) ->
-        Alcotest.fail
-          (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e))
+          Alcotest.fail
+            (Format.asprintf
+               "Ledger error: %a"
+               Ledgerwallet.Transport.pp_error
+               e))
 
 let with_connection f =
   fail_on_error

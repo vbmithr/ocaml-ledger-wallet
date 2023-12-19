@@ -528,7 +528,10 @@ let hash_sign ?pp ?buf ~path ~hash_type ~hash_flags h
   signature
 
 let sign ?pp ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
-  ListLabels.fold_right prev_outputs ~init:(Lwt_result.return []) ~f:(fun (tx, i) acc ->
+  ListLabels.fold_right
+    prev_outputs
+    ~init:(Lwt_result.return [])
+    ~f:(fun (tx, i) acc ->
       acc >>= fun tail ->
       get_trusted_input ?buf h tx i >|= fun input ->
       let () = assert (Cstruct.length input = 56) in

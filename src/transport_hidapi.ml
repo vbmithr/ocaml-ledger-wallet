@@ -196,24 +196,24 @@ let read ?pp ?(buf = Cstruct.create packet_length) h =
     Lwt.return (apdu_error (Header.check_seqnum hdr !expected_seq))
     >>= fun () ->
     (if hdr.seq = 0 then (
-       (* first frame *)
-       let len = Cstruct.BE.get_uint16 buf 0 in
-       let cs = Cstruct.shift buf 2 in
-       payload := Cstruct.create len ;
-       full_payload := !payload ;
-       let nb_to_read = min len (packet_length - 7) in
-       Cstruct.blit cs 0 !payload 0 nb_to_read ;
-       payload := Cstruct.shift !payload nb_to_read ;
-       (* pos := !pos + nb_to_read ; *)
-       expected_seq := !expected_seq + 1)
-     else
-       (* next frames *)
-       (* let rem = Bytes.length !payload - !pos in *)
-       let nb_to_read = min (Cstruct.length !payload) (packet_length - 5) in
-       Cstruct.blit buf 0 !payload 0 nb_to_read ;
-       payload := Cstruct.shift !payload nb_to_read ;
-       (* pos := !pos + nb_to_read ; *)
-       expected_seq := !expected_seq + 1) ;
+     (* first frame *)
+     let len = Cstruct.BE.get_uint16 buf 0 in
+     let cs = Cstruct.shift buf 2 in
+     payload := Cstruct.create len ;
+     full_payload := !payload ;
+     let nb_to_read = min len (packet_length - 7) in
+     Cstruct.blit cs 0 !payload 0 nb_to_read ;
+     payload := Cstruct.shift !payload nb_to_read ;
+     (* pos := !pos + nb_to_read ; *)
+     expected_seq := !expected_seq + 1)
+    else
+      (* next frames *)
+      (* let rem = Bytes.length !payload - !pos in *)
+      let nb_to_read = min (Cstruct.length !payload) (packet_length - 5) in
+      Cstruct.blit buf 0 !payload 0 nb_to_read ;
+      payload := Cstruct.shift !payload nb_to_read ;
+      (* pos := !pos + nb_to_read ; *)
+      expected_seq := !expected_seq + 1) ;
     match (Cstruct.length !payload, hdr.cmd) with
     | 0, Ping -> return (Status.Ok, Cstruct.create 0)
     | 0, Apdu ->
