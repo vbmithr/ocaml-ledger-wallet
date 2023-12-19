@@ -1,4 +1,4 @@
-open Rresult
+open Lwt_result.Infix
 open Ledgerwallet_btc
 open Bitcoin.Protocol
 open Bitcoin.Util
@@ -33,12 +33,13 @@ let nextTx =
   let output = TxOut.create ~value ~script:my_out.script in
   Transaction.create ~inputs:[|input|] ~outputs:[|output|] ()
 
-let fail_on_error = function
-  | None -> Alcotest.fail "Found no ledger."
-  | Some (Result.Ok ()) -> ()
-  | Some (Result.Error e) ->
-      Alcotest.fail
-        (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e)
+let fail_on_error x =
+  Lwt.bind x (function
+      | None -> Alcotest.fail "Found no ledger."
+      | Some (Result.Ok ()) -> Lwt.return_unit
+      | Some (Result.Error e) ->
+        Alcotest.fail
+          (Format.asprintf "Ledger error: %a" Ledgerwallet.Transport.pp_error e))
 
 let with_connection f =
   fail_on_error
@@ -47,7 +48,7 @@ let with_connection f =
        ~product_id:0x0001
        f)
 
-let test_open_close () = with_connection (fun _ -> R.ok ())
+let test_open_close () = with_connection (fun _ -> Lwt_result.return ())
 
 let test_ping () = with_connection Ledgerwallet.Transport.ping
 
@@ -58,16 +59,16 @@ let test_get_info () =
         "Firmware: %s\n"
         (Sexplib.Sexp.to_string_hum
            (Firmware_version.sexp_of_t firmware_version)) ;
-      get_operation_mode h >>| fun op_mode ->
+      get_operation_mode h >|= fun op_mode ->
       Printf.printf
         "Operation mode: %s\n"
         (Sexplib.Sexp.to_string_hum (Operation_mode.sexp_of_t op_mode)))
 
-let test_get_random () = with_connection (fun h -> get_random h 200 >>| ignore)
+let test_get_random () = with_connection (fun h -> get_random h 200 >|= ignore)
 
 let test_get_wallet_pk () =
   with_connection (fun h ->
-      get_wallet_public_key h path >>| fun pk ->
+      get_wallet_public_key h path >|= fun pk ->
       let pk_computed = Secp256k1.Key.read_pk_exn ctx pk.uncompressed.buffer in
       let addr_received = Base58.Bitcoin.of_string_exn c pk.b58addr in
       let addr_computed = Bitcoin.Wallet.Address.of_pubkey ctx pk_computed in
@@ -91,7 +92,7 @@ let test_get_wallet_pk () =
 
 let test_get_trusted_input () =
   with_connection (fun h ->
-      get_trusted_input h prevTx 0 >>| fun out ->
+      get_trusted_input h prevTx 0 >|= fun out ->
       Format.printf "Trusted input %a@." Hex.pp (Hex.of_cstruct out))
 
 let test_sign_segwit () =
@@ -102,7 +103,7 @@ let test_sign_segwit () =
         Secp256k1.Key.to_bytes ctx pk_computed |> Cstruct.of_bigarray
       in
       sign_segwit ~bch:true ~path ~prev_amounts:[3000000000L] h nextTx
-      >>| fun bch_signatures ->
+      >|= fun bch_signatures ->
       Printf.printf "Got %d BCH signatures.\n%!" (List.length bch_signatures) ;
       let bchSig = List.hd bch_signatures in
       let scriptSig =
@@ -135,4 +136,4 @@ let basic =
     ("sign_segwit", `Quick, test_sign_segwit);
   ]
 
-let () = Alcotest.run "ledgerwallet.btc" [("basic", basic)]
+let () = Lwt_main.run @@ Alcotest_lwt.run "ledgerwallet.btc" [("basic", basic)]

@@ -49,40 +49,40 @@ val get_random :
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
   int ->
-  (string, Ledgerwallet.Transport.error) result
+  (string, Ledgerwallet.Transport.error) Lwt_result.t
 
 val get_operation_mode :
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (Operation_mode.t, Ledgerwallet.Transport.error) result
+  (Operation_mode.t, Ledgerwallet.Transport.error) Lwt_result.t
 
 val get_second_factor :
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (Second_factor.t, Ledgerwallet.Transport.error) result
+  (Second_factor.t, Ledgerwallet.Transport.error) Lwt_result.t
 
 val get_firmware_version :
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (Firmware_version.t, Ledgerwallet.Transport.error) result
+  (Firmware_version.t, Ledgerwallet.Transport.error) Lwt_result.t
 
 val verify_pin :
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
   string ->
-  ([`Ok | `Need_power_cycle], Ledgerwallet.Transport.error) result
+  ([`Ok | `Need_power_cycle], Ledgerwallet.Transport.error) Lwt_result.t
 
 val get_remaining_pin_attempts :
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
-  (int, Ledgerwallet.Transport.error) result
+  (int, Ledgerwallet.Transport.error) Lwt_result.t
 
 val get_wallet_public_key :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
   Bitcoin.Wallet.KeyPath.t ->
-  (Public_key.t, Ledgerwallet.Transport.error) result
+  (Public_key.t, Ledgerwallet.Transport.error) Lwt_result.t
 
 val get_trusted_input :
   ?pp:Format.formatter ->
@@ -90,7 +90,7 @@ val get_trusted_input :
   Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
   int ->
-  (Cstruct.t, Ledgerwallet.Transport.error) result
+  (Cstruct.t, Ledgerwallet.Transport.error) Lwt_result.t
 
 type input_type =
   | Untrusted
@@ -105,14 +105,14 @@ val hash_tx_input_start :
   Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
   int ->
-  (unit, Ledgerwallet.Transport.error) result
+  (unit, Ledgerwallet.Transport.error) Lwt_result.t
 
 val hash_tx_finalize_full :
   ?pp:Format.formatter ->
   ?buf:Cstruct.t ->
   Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
-  (Cstruct.t, Ledgerwallet.Transport.error) result
+  (Cstruct.t, Ledgerwallet.Transport.error) Lwt_result.t
 
 module HashType : sig
   type typ = All | None | Single
@@ -130,7 +130,7 @@ val hash_sign :
   hash_flags:HashType.flag list ->
   Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
-  (Cstruct.t, Ledgerwallet.Transport.error) result
+  (Cstruct.t, Ledgerwallet.Transport.error) Lwt_result.t
 
 val sign :
   ?pp:Format.formatter ->
@@ -139,7 +139,7 @@ val sign :
   prev_outputs:(Bitcoin.Protocol.Transaction.t * int) list ->
   Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
-  (Cstruct.t list, Ledgerwallet.Transport.error) result
+  (Cstruct.t list, Ledgerwallet.Transport.error) Lwt_result.t
 
 val sign_segwit :
   ?pp:Format.formatter ->
@@ -149,7 +149,7 @@ val sign_segwit :
   prev_amounts:Int64.t list ->
   Ledgerwallet.Transport.t ->
   Bitcoin.Protocol.Transaction.t ->
-  (Cstruct.t list, Ledgerwallet.Transport.error) result
+  (Cstruct.t list, Ledgerwallet.Transport.error) Lwt_result.t
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff

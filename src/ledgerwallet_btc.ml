@@ -3,7 +3,7 @@
    Distributed under the ISC license, see terms at the end of the file.
   ---------------------------------------------------------------------------*)
 
-open Rresult
+open Lwt_result.Infix
 open Ledgerwallet
 open Sexplib.Std
 
@@ -122,7 +122,7 @@ let wrap_adm_ins ins =
 
 let get_random ?buf h len =
   Transport.apdu ?buf h Apdu.(create ~le:len (wrap_ins Get_random))
-  >>| Cstruct.to_string
+  >|= Cstruct.to_string
 
 module Operation_mode = struct
   type mode = Standard | Relaxed | Server | Developer [@@deriving sexp]
@@ -152,11 +152,11 @@ end
 
 let get_operation_mode ?buf h =
   Transport.apdu ?buf h Apdu.(create ~le:1 (wrap_ins Get_operation_mode))
-  >>| fun b -> Operation_mode.of_int (Cstruct.get_uint8 b 0)
+  >|= fun b -> Operation_mode.of_int (Cstruct.get_uint8 b 0)
 
 let get_second_factor ?buf h =
   Transport.apdu ?buf h Apdu.(create ~p1:1 ~le:1 (wrap_ins Get_operation_mode))
-  >>| fun b -> Second_factor.of_int (Cstruct.get_uint8 b 0)
+  >|= fun b -> Second_factor.of_int (Cstruct.get_uint8 b 0)
 
 module Firmware_version = struct
   type flag =
@@ -204,7 +204,7 @@ end
 let get_firmware_version ?buf h =
   let open EndianString.BigEndian in
   Transport.apdu ?buf h Apdu.(create ~le:7 (wrap_ins Get_firmware_version))
-  >>| fun b ->
+  >|= fun b ->
   let open Cstruct in
   let flags = get_uint8 b 0 in
   let arch = get_uint8 b 1 in
@@ -227,7 +227,7 @@ let get_firmware_version ?buf h =
 let verify_pin ?buf h pin =
   let lc = String.length pin in
   Transport.apdu ?buf h Apdu.(create_string ~lc ~data:pin (wrap_ins Verify_pin))
-  >>| fun b ->
+  >|= fun b ->
   match Cstruct.get_uint8 b 0 with 0x01 -> `Need_power_cycle | _ -> `Ok
 
 let get_remaining_pin_attempts ?buf h =
@@ -236,7 +236,7 @@ let get_remaining_pin_attempts ?buf h =
     h
     Apdu.(create_string ~p1:0x80 ~lc:1 ~data:"\x00" (wrap_ins Verify_pin))
   >>= fun () ->
-  Transport.read ?buf h >>| function
+  Transport.read ?buf h >|= function
   | Status.Invalid_pin n, _ -> n
   | Status.Ok, _ -> failwith "get_remaining_pin_attempts got OK"
   | s, _ -> failwith (Status.to_string s)
@@ -282,7 +282,7 @@ let get_wallet_public_key ?pp ?buf h keyPath =
     ?buf
     h
     Apdu.(create ~lc ~data:data_init (wrap_ins Get_wallet_public_key))
-  >>| fun b -> fst (Public_key.of_cstruct b)
+  >|= fun b -> fst (Public_key.of_cstruct b)
 
 let get_trusted_input ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) index =
   let open Bitcoin in
@@ -415,7 +415,7 @@ let hash_tx_input_start ?pp ?buf ~new_transaction ~input_type h
         init_cs
         (Array.to_list tx.inputs)
         amounts
-      >>= fun (_ : Cstruct.t) -> R.ok ()
+      >>= fun (_ : Cstruct.t) -> Lwt_result.return ()
   | Trusted inputs ->
       init_cs
       >>= (fun (_ : Cstruct.t) ->
@@ -444,11 +444,11 @@ let hash_tx_input_start ?pp ?buf ~new_transaction ~input_type h
                   ~cmd
                   ~p1:0x80
                   (Cstruct.sub cs 0 lc)
-                >>= fun (_ : Cstruct.t) -> R.ok (succ i))
-              (R.ok 0)
+                >>= fun (_ : Cstruct.t) -> Lwt_result.return (succ i))
+              (Lwt_result.return 0)
               (Array.to_list tx.inputs)
               inputs)
-      >>| ignore
+      >|= ignore
   | _ -> invalid_arg "unsupported input type"
 
 let hash_tx_finalize_full ?pp ?buf h (tx : Bitcoin.Protocol.Transaction.t) =
@@ -523,19 +523,19 @@ let hash_sign ?pp ?buf ~path ~hash_type ~hash_flags h
     ?buf
     h
     Apdu.(create ~lc ~data:cs (wrap_ins Hash_sign))
-  >>| fun signature ->
+  >|= fun signature ->
   Cstruct.set_uint8 signature 0 0x30 ;
   signature
 
 let sign ?pp ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
-  ListLabels.fold_right prev_outputs ~init:(R.ok []) ~f:(fun (tx, i) acc ->
+  ListLabels.fold_right prev_outputs ~init:(Lwt_result.return []) ~f:(fun (tx, i) acc ->
       acc >>= fun tail ->
-      get_trusted_input ?buf h tx i >>| fun input ->
+      get_trusted_input ?buf h tx i >|= fun input ->
       let () = assert (Cstruct.length input = 56) in
       input :: tail)
   >>= fun trusted_inputs ->
   ArrayLabels.fold_left
-    ~init:(R.ok (0, []))
+    ~init:(Lwt_result.return (0, []))
     tx.inputs
     ~f:(fun res _ ->
       res >>= fun (i, acc) ->
@@ -550,8 +550,8 @@ let sign ?pp ?buf ~path ~prev_outputs h (tx : Bitcoin.Protocol.Transaction.t) =
       >>= fun () ->
       let _ret = hash_tx_finalize_full ?pp ?buf h tx in
       hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags:[] h tx
-      >>| fun signature -> (succ i, signature :: acc))
-  >>| snd
+      >|= fun signature -> (succ i, signature :: acc))
+  >|= snd
 
 let sign_segwit ?pp ?(bch = false) ?buf ~path ~prev_amounts h
     (tx : Bitcoin.Protocol.Transaction.t) =
@@ -577,7 +577,7 @@ let sign_segwit ?pp ?(bch = false) ?buf ~path ~prev_amounts h
   ListLabels.fold_right2
     (Array.to_list tx.inputs)
     prev_amounts
-    ~init:(R.ok [])
+    ~init:(Lwt_result.return [])
     ~f:(fun txi prev_amount acc ->
       acc >>= fun tail ->
       let virtual_tx = {tx with inputs = [|txi|]; outputs = [||]} in
@@ -592,7 +592,7 @@ let sign_segwit ?pp ?(bch = false) ?buf ~path ~prev_amounts h
       >>= fun () ->
       let hash_flags = if bch then [HashType.ForkId] else [] in
       hash_sign ?pp ?buf ~path ~hash_type:All ~hash_flags h virtual_tx
-      >>| fun signature -> signature :: tail)
+      >|= fun signature -> signature :: tail)
 
 (*---------------------------------------------------------------------------
    Copyright (c) 2017 Vincent Bernardoff
