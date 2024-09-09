@@ -47,12 +47,16 @@ module Ids = struct
   let nano_x_product_ids = [0x0004] @ (0x4000 -- 0x401f)
 
   let nano_s_plus_product_ids = [0x0005] @ (0x5000 -- 0x501f)
+
+  let stax_product_ids = [0x0006] @ (0x6000 -- 0x601f)
+
+  let flex_product_ids = [0x0007] @ (0x7000 -- 0x701f)
 end
 
 let enumerate_hidapi () =
   let open Ids in
   let all_product_ids =
-    nano_s_product_ids @ nano_x_product_ids @ nano_s_plus_product_ids
+    nano_s_product_ids @ nano_x_product_ids @ nano_s_plus_product_ids @ stax_product_ids @ flex_product_ids
   in
   let open Hidapi_lwt in
   let+ infos = enumerate ~vendor_id () in
